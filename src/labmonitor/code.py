@@ -21,7 +21,6 @@ import json
 import adafruit_requests
 from adafruit_httpserver import Server, MIMETypes, Response
 
-from adafruit_datetime import datetime
 import adafruit_ntp
 
 # MCP9808 ONLY
