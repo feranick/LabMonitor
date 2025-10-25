@@ -1,10 +1,10 @@
-# **********************************************
+ # **********************************************
 # * LabMonitor - Rasperry Pico W
-# * v2025.10.24.2
+# * v2025.10.25.1
 # * By: Nicola Ferralis <feranick@hotmail.com>
 # **********************************************
 
-version = "2025.10.24.2"
+version = "2025.10.25.1"
 
 import wifi
 import time
@@ -73,7 +73,7 @@ class Conf:
         except ValueError:
             self.sensor1 = None
             print(f"Warning: Invalid 'sensor1TemperatureOffset' '{sensor1TemperatureOffset}' in settings.toml. Using default.")
-            
+
         try:
             self.sensor2 = os.getenv("sensor2")
             temperature_offset2 = os.getenv("sensor2TemperatureOffset")
@@ -164,7 +164,9 @@ class LabServer:
         def api_status(request):
             sensData1 = self.sensors.getData(self.sensors.envSensor1, self.sensors.envSensorName1, self.sensors.temp_offset1)
             sensData2 = self.sensors.getData(self.sensors.envSensor2, self.sensors.envSensorName2, self.sensors.temp_offset2)
-            
+
+            UTC = self.getUTC()
+
             data_dict = {
                 "sens1_Temp": sensData1['temperature'],
                 "sens1_RH": sensData1['RH'],
@@ -176,8 +178,9 @@ class LabServer:
                 "sens2_type": sensData2['type'],
                 "ip": self.ip,
                 "version": version,
+                "UTC": UTC,
             }
-            
+
             json_content = json.dumps(data_dict)
             print(json_content)
 
@@ -257,9 +260,16 @@ class LabServer:
 
     def setup_ntp(self):
         try:
-            self.ntp = adafruit_ntp.NTP(socketpool.SocketPool(wifi.radio), tz_offset=-5)
+            self.ntp = adafruit_ntp.NTP(socketpool.SocketPool(wifi.radio), tz_offset=0)
         except Exception as e:
             print(f"Failed to setup NTP: {e}")
+
+    def getUTC(self):
+        try:
+            return self.ntp.utc_ns
+        except Exception as e:
+            print(f"Error converting NTP time: {e}")
+            return 0
 
     def reboot(self):
         time.sleep(2)
@@ -274,20 +284,20 @@ class Sensors:
         self.envSensor2 = None
         self.envSensorName1 = conf.sensor1
         self.envSensorName2 = conf.sensor2
-    
+
         self.temp_offset1 = conf.sensor1TemperatureOffset
         self.temp_offset2 = conf.sensor2TemperatureOffset
 
         self.envSensor1 = self.initSensor(self.envSensor1, conf.sensor1)
         self.envSensor2 = self.initSensor(self.envSensor2, conf.sensor2)
-                
+
         if self.envSensor1 != None:
             self.avDeltaT = microcontroller.cpu.temperature - self.envSensor1.temperature
         else:
             self.avDeltaT = 0
-            
+
         self.numTimes = 1
-        
+
     def initSensor(self, envSensor, envSensorName):
         try:
             if envSensorName == "MCP9808":
@@ -337,7 +347,7 @@ class Sensors:
                 return {'temperature': f"{round(t_cpu, 1)} ", 'RH': '--', 'pressure': '--', 'type': 'CPU raw'}
         try:
             envSensorData = self.getSensorData(envSensor, envSensorName)
-        
+
             t_envSensor = float(envSensorData['temperature']) + temp_offset
             if envSensorName == "MCP9808":
                 rh_envSensor = "--"
@@ -345,7 +355,7 @@ class Sensors:
             else:
                 rh_envSensor = round(float(envSensorData['RH']),1)
                 p_envSensor = int(float(envSensorData['pressure']))
-        
+
             delta_t = t_cpu - t_envSensor
             if self.numTimes >= 2e+1:
                 self.numTimes = int(1e+1)
@@ -358,7 +368,7 @@ class Sensors:
             print(f"{envSensorName} not available. Av CPU/MCP T diff: {self.avDeltaT}")
             time.sleep(0.5)
             return {'temperature': f"{round(t_cpu-self.avDeltaT, 1)}", 'RH': '--', 'pressure': '--', 'type': 'CPU adj'}
-            
+
     def getSensorData(self, envSensor, envSensorName):
         if envSensorName == "MCP9808":
             sensorData = self.getEnvDataMCP9808(envSensor)
@@ -367,7 +377,7 @@ class Sensors:
         elif envSensorName == "BME680":
             sensorData = self.getEnvDataBME680(envSensor)
         return sensorData
-        
+
 ############################
 # Main
 ############################

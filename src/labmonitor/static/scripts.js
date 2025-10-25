@@ -2,30 +2,15 @@ let coords = null;
 
 ////////////////////////////////////
 // Get and format Date and Time
-////////////////////////////////////
-function getCurrentDateTime() {
-    function get_dig(a) {
-        if (a<10) {
-            secs = "0"+a;}
-        else {
-            secs = a;}
-        return secs;}
-        
-    let now = new Date();
-    month = now.getMonth()+1
-    day = now.getDate()
-    year = now.getFullYear()
-    hours = get_dig(now.getHours())
-    minutes = get_dig(now.getMinutes())
-    
-    if (now.getSeconds()<10) {
-        secs = "0"+now.getSeconds();}
-    else {
-        secs = now.getSeconds();}
-        
-    formattedTime = hours +":"+minutes+":"+secs;
-    formattedDate = month+"/"+day+"/"+year;
-    return formattedDate+"      "+formattedTime;
+////////////////////////////////////   
+function getCurrentDateTimeUTC(UTC) {
+    console.log("UTC:");
+    console.log(parseInt(UTC));
+    console.log("UTC converted:");
+    console.log(Math.round(parseInt(UTC)/1e6));
+    const dateObject = new Date(Math.round(UTC/1e6));
+    console.log(dateObject);
+    return dateObject.toLocaleString();
     }
 
 ////////////////////////////////////
@@ -62,9 +47,10 @@ async function updateStatus() {
     document.getElementById("Status").value = "Loading...";
     //document.getElementById("warnLabel").textContent = "Testing";
     
-    datetime = getCurrentDateTime();
     data = await fetchData();
     console.log(data);
+    
+    datetime = getCurrentDateTimeUTC(data.UTC);
     
     document.getElementById("Status").style.backgroundColor = "navy";
 
@@ -95,8 +81,6 @@ function getWebBulbTemp(temp, rh, type) {
     if (type === 'sensor') {
         const T = parseFloat(temp);
         const RH = parseFloat(rh);
-        //const T = parseFloat(document.getElementById(temp).value);
-        //const RH = parseFloat(document.getElementById(rh).value);
         let term1 = T * Math.atan(0.151977 * Math.sqrt(RH + 8.313659));
         let term2 = Math.atan(T + RH);
         let term3 = Math.atan(RH - 1.676331);
