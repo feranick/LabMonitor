@@ -1,10 +1,10 @@
  # **********************************************
 # * LabMonitor - Rasperry Pico W
-# * v2025.10.25.1
+# * v2025.10.25.2
 # * By: Nicola Ferralis <feranick@hotmail.com>
 # **********************************************
 
-version = "2025.10.25.1"
+version = "2025.10.25.2"
 
 import wifi
 import time
@@ -93,6 +93,14 @@ class LabServer:
         self.ntp = None
         self.server = None
         self.ip = "0.0.0.0"
+        
+        try:
+            self.submitToMongo = os.getenv("submitToMongo").lower() == "true"
+            self.mongoURL = os.getenv("mongoURL")
+        except:
+            self.submitToMongo = False
+            
+        print(self.submitToMongo)
 
         try:
             self.connect_wifi()
@@ -182,6 +190,9 @@ class LabServer:
 
             json_content = json.dumps(data_dict)
             print(json_content)
+            
+            if self.submitToMongo and self.mongoURL is not None:
+                self.sendDataMongo(self.mongoURL, data_dict)
 
             headers = {"Content-Type": "application/json"}
 
@@ -256,7 +267,46 @@ class LabServer:
                 print(f"Unexpected critical error in server poll: {e}")
 
             time.sleep(0.01)
+            
+    def sendDataMongo(self, url, data):
+        print("-" * 40)
+        print(f"Attempting to POST data to: {url}")
+        print(f"Payload: {json.dumps(data)}")
+        
+        headers = {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+            # 'Authorization': f'Bearer {custom_server_secret}' # Uncomment if your server uses a token
+        }
+        try:
+            response = self.requests.post(
+                url,
+                json=data,
+                headers=headers,
+                timeout=10 # Set a timeout for the request
+            )
 
+            # Check for success (HTTP 200 series status code)
+            if response.status_code == 200:
+                print("Data successfully sent!")
+                print("Server Response:", response.text)
+            else:
+                print(f"Server returned status code: {response.status_code}")
+                try:
+                    # Try to print JSON error response if available
+                    print("Server Error Details:", response.json())
+                except:
+                    # Fallback to printing raw text
+                    print("Server Error Text:", response.text)
+
+            response.close() # Crucial: always close the response object
+
+        except Exception as e:
+            print(f"An error occurred during the POST request: {e}")
+            
+    ############################
+    # Set up time/date
+    ############################
     def setup_ntp(self):
         try:
             self.ntp = adafruit_ntp.NTP(socketpool.SocketPool(wifi.radio), tz_offset=0)

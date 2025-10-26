@@ -4,12 +4,7 @@ let coords = null;
 // Get and format Date and Time
 ////////////////////////////////////   
 function getCurrentDateTimeUTC(UTC) {
-    console.log("UTC:");
-    console.log(parseInt(UTC));
-    console.log("UTC converted:");
-    console.log(Math.round(parseInt(UTC)/1e6));
     const dateObject = new Date(Math.round(UTC/1e6));
-    console.log(dateObject);
     return dateObject.toLocaleString();
     }
 
