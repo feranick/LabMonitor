@@ -100,8 +100,6 @@ class LabServer:
         except:
             self.submitToMongo = False
             
-        print(self.submitToMongo)
-
         try:
             self.connect_wifi()
             self.setup_server()
