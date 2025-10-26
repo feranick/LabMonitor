@@ -1,4 +1,5 @@
 let coords = null;
+let intervalId;
 
 ////////////////////////////////////
 // Get and format Date and Time
@@ -67,7 +68,24 @@ async function updateStatus() {
 }
 
 document.addEventListener('DOMContentLoaded', updateStatus);
-setInterval(updateStatus, 30000, "False");
+document.addEventListener('DOMContentLoaded', function() {
+
+    const refreshRateInput = document.getElementById("refreshRate");
+    const startOrRestartInterval = () => {
+        if (intervalId) {
+            clearInterval(intervalId);
+            console.log("Stopped old interval.");
+        }
+        const rawValue = parseInt(refreshRateInput.value, 10) || 10;
+        const refreshRate = rawValue * 1000;
+        intervalId = setInterval(updateStatus, refreshRate, "False");
+        console.log(`Set new refresh rate to: ${refreshRate / 1000} seconds`);
+    };
+    startOrRestartInterval();
+    refreshRateInput.addEventListener('input', startOrRestartInterval);
+});
+
+//setInterval(updateStatus, 30000, "False");
 
 //////////////////////////////////////////////
 // Utilities
