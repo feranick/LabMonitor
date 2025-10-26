@@ -1,7 +1,7 @@
 {
-  "name": "Pico Garage Opener",
-  "short_name": "PicoGarageOpener",
-  "description": "Control system for the Pico W Garage Opener with weather.",
+  "name": "LabMonitor",
+  "short_name": "LabMonitor",
+  "description": "Monitor Lab temperature, RH and wet bulb Temperature with plotter capabilities",
   "start_url": ".",
   "display": "standalone",
   "icons": [
