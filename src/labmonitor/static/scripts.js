@@ -141,11 +141,24 @@ async function updatePlot() {
     chartDataStore.sens2_Temp.push(s2_Temp);
     chartDataStore.sens2_RH.push(s2_RH);
 
+    // --- 3. Update the chart's shared X-axis ---
+    sensorChart.data.labels.push(timestamp);
+
+    // --- 4. Push new data ONLY to active datasets ---
+    sensorChart.data.datasets.forEach(dataset => {
+        const key = dataset.label;
+        if (key === 'sens1_Temp') dataset.data.push(s1_Temp);
+        if (key === 'sens1_RH') dataset.data.push(s1_RH);
+        if (key === 'sens1_WBT') dataset.data.push(s1_WBT);
+        if (key === 'sens2_Temp') dataset.data.push(s2_Temp);
+        if (key === 'sens2_RH') dataset.data.push(s2_RH);
+    });
+
     // --- 5. Redraw the chart ---
     sensorChart.update('none'); 
 
     // --- 6. UPDATE CURRENT MEASUREMENTS ---
-    document.getElementById("datetime_current").textContent = getCurrentDateTimeUTC(data.UTC);
+    document.getElementById("datetime_current").textContent = datetime;
     document.getElementById("sens1_Temp_current").textContent = data.sens1_Temp + " \u00B0C";
     document.getElementById("sens1_Temp_current").style.color = "#00008B";
     document.getElementById("sens1_RH_current").textContent = data.sens1_RH + "%";
@@ -214,6 +227,7 @@ function stopInterval() {
     }
 }
 
+// --- NEW FUNCTION ---
 //////////////////////////////////////////////
 // Clear Plot Data
 //////////////////////////////////////////////
@@ -227,10 +241,18 @@ function clearPlot() {
     chartDataStore.sens2_Temp = [];
     chartDataStore.sens2_RH = [];
 
-    // 2. Redraw the empty chart
+    // 2. Clear the chart's visible data
+    sensorChart.data.labels = [];
+    sensorChart.data.datasets.forEach(dataset => {
+        dataset.data = [];
+    });
+
+    // 3. Redraw the empty chart
     sensorChart.update();
     console.log("Plot cleared.");
 }
+// --- END NEW FUNCTION ---
+
 
 //////////////////////////////////////////////
 // Export Functions
