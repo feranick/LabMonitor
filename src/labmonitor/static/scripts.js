@@ -265,7 +265,7 @@ function exportToPng() {
     sensorChart.options.plugins.backgroundColor = 'white';
 
     link.href = sensorChart.toBase64Image();
-    link.download = 'sensor-plot.png';
+    link.download = chartDataStore.isoLabels.at(-1)+'_sensor-plot.png';
     link.click();
 
     sensorChart.options.plugins.title = { display: false };
@@ -292,7 +292,7 @@ function exportToCsv() {
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
-    link.setAttribute('download', 'sensor-data.csv');
+    link.setAttribute('download', chartDataStore.isoLabels.at(-1)+'_sensor-data.csv');
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
