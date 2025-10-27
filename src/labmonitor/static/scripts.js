@@ -212,7 +212,7 @@ function startInterval() {
     stopInterval(); 
     
     const rateInput = document.getElementById("refreshRate");
-    const refreshRate = (parseInt(rateInput.value, 10) || 10) * 1000;
+    const refreshRate = (parseInt(rateInput.value, 10) || 30) * 1000;
     
     updatePlot(); 
     intervalId = setInterval(updatePlot, refreshRate);

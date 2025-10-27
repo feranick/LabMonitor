@@ -26,7 +26,7 @@
     }
     fieldset {
         background-color: #C0C0C0;
-        max-width: 500px;
+        max-width: 600px;
         margin: 10px auto;
         padding: 15px;
         border: 1px solid #ccc;
@@ -109,42 +109,6 @@
     <canvas id="sensorChart"></canvas>
 </div>
 
-<fieldset class="checkbox-group">
-    <legend>Select Data to Plot</legend>
-    <label>
-        <input type="checkbox" class="data-checkbox" data-key="sens1_Temp" data-color="red" checked>
-        Sensor 1 Temp
-    </label>
-    <label>
-        <input type="checkbox" class="data-checkbox" data-key="sens1_RH" data-color="blue" checked>
-        Sensor 1 RH
-    </label>
-    <label>
-        <input type="checkbox" class="data-checkbox" data-key="sens2_Temp" data-color="green" checked>
-        Sensor 2 Temp
-    </label>
-    <label>
-        <input type="checkbox" class="data-checkbox" data-key="sens1_WBT" data-color="purple">
-        Sensor 1 WBT
-    </label>
-</fieldset>
-
-<fieldset>
-    <legend><strong>Acquisition Controls</strong></legend>
-    <label for="refreshRate">Refresh:</label>
-    <input type="number" id="refreshRate" value="10" min="1">
-    <span>seconds</span>
-    
-    <button id="toggleButton">Stop</button>
-    <button id="clearButton">Clear Plot</button>
-    </fieldset>
-
-<fieldset>
-    <legend><strong>Export</strong></legend>
-    <button id="savePngButton">Save Plot as PNG</button>
-    <button id="saveCsvButton">Save Data as CSV</button>
-</fieldset>
-
 <fieldset>
     <legend style="width: 100%; text-align: center; font-weight: bold;">
         Current Measurements (<span id="datetime_current">Time N/A</span>)
@@ -153,7 +117,7 @@
         <div class="column">
             <strong>Sensor 1:</strong>
             <br>Temperature:
-            <br>Rel. Humidity:
+            <br>RH:
             <br>Wet Bulb T:
         </div>
         <div class="column">
@@ -172,6 +136,43 @@
         </div>
     </div>
 </fieldset>
+
+<fieldset>
+    <legend><strong>Acquisition Controls</strong></legend>
+    <label for="refreshRate">Refresh:</label>
+    <input type="number" id="refreshRate" value="30" min="1">
+    <span>seconds</span>
+    
+    <button id="toggleButton">Stop</button>
+    <button id="clearButton">Clear Plot</button>
+    </fieldset>
+
+<fieldset class="checkbox-group">
+    <legend>Select Data to Plot</legend>
+    <label>
+        <input type="checkbox" class="data-checkbox" data-key="sens1_Temp" data-color="red" checked>
+        Sensor 1 Temp
+    </label>
+    <label>
+        <input type="checkbox" class="data-checkbox" data-key="sens1_WBT" data-color="purple" checked>
+        Sensor 1 WBT
+    </label>
+    <label>
+        <input type="checkbox" class="data-checkbox" data-key="sens2_Temp" data-color="green" checked>
+        Sensor 2 Temp
+    </label>
+    <label>
+        <input type="checkbox" class="data-checkbox" data-key="sens1_RH" data-color="blue">
+        Sensor 1 RH
+    </label>
+</fieldset>
+
+<fieldset>
+    <legend><strong>Export</strong></legend>
+    <button id="savePngButton">Save Plot as PNG</button>
+    <button id="saveCsvButton">Save Data as CSV</button>
+</fieldset>
+
 <button id="simpleUIBtn">Simple UI</button>
 
 <small><small>Device IP: <span id="ip_address">N/A</span></small></small>
