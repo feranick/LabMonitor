@@ -48,11 +48,20 @@ async function updateStatus() {
     datetime = getCurrentDateTimeUTC(data.UTC);
     
     document.getElementById("sens1_Temp").textContent = data.sens1_Temp + " \u00B0C";
+    document.getElementById("sens1_Temp").style.color = "#00008B";
     document.getElementById("sens1_RH").textContent = data.sens1_RH + "%";
     document.getElementById("sens1_WBT").textContent = getWebBulbTemp(data.sens1_Temp, data.sens1_RH, data.sens1_type) + " \u00B0C";
 
     document.getElementById("sens2_Temp").textContent = data.sens2_Temp + " \u00B0C";
+    document.getElementById("sens2_Temp").style.color = "#00008B";
     //document.getElementById("sens2_RH").textContent = data.sens2_RH + " %";
+    if (data.sens1_type != "sensor") {
+        document.getElementById("sens1_Temp").style.color = "red";
+        }
+        
+    if (data.sens2_type != "sensor") {
+        document.getElementById("sens2_Temp").style.color = "red";
+        }
 
     document.getElementById("datetime").textContent = datetime;
     document.getElementById("ip_address").textContent = data.ip;
