@@ -115,11 +115,11 @@ class LabServer:
         try:
             self.mongoURL = os.getenv("mongoURL")
             self.submitToMongo = os.getenv("submitToMongo").lower() == "true"
-            # NEW: Load the secret key from settings.toml
             self.mongoSecretKey = os.getenv("mongoSecretKey")
         except:
+            self.self.mongoURL = None
             self.submitToMongo = False
-            self.mongoSecretKey = None # Add this fallback
+            self.mongoSecretKey = None
 
     def fail_reboot(self):
         print("Rebooting in 5 seconds due to error...")
@@ -197,13 +197,13 @@ class LabServer:
                 "ip": self.ip,
                 "version": version,
                 "UTC": UTC,
+                "submitToMongo", self.submitToMongo,
+                "mongoURL": self.mongoURL,
+                "mongoSecretKey": self.mongoSecretKey,
             }
 
             json_content = json.dumps(data_dict)
             print(json_content)
-            
-            if self.submitToMongo and self.mongoURL is not None:
-                self.sendDataMongo(self.mongoURL, data_dict)
 
             headers = {"Content-Type": "application/json"}
 
@@ -282,45 +282,6 @@ class LabServer:
                 print(f"Unexpected critical error in server poll: {e}")
 
             time.sleep(0.01)
-            
-    def sendDataMongo(self, url, data):
-        print("-" * 40)
-        print(f"Attempting to POST data to: {url}")
-        print(f"Payload: {json.dumps(data)}")
-        
-        headers = {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json'
-        }
-        
-        if self.mongoSecretKey:
-            headers['Authorization'] = f'Bearer {self.mongoSecretKey}'
-        
-        try:
-            response = self.requests.post(
-                url,
-                json=data,
-                headers=headers,
-                timeout=10 # Set a timeout for the request
-            )
-
-            # Check for success (HTTP 200 series status code)
-            if response.status_code == 200:
-                print("Data successfully sent!")
-                print("Server Response:", response.text)
-            else:
-                print(f"Server returned status code: {response.status_code}")
-                try:
-                    # Try to print JSON error response if available
-                    print("Server Error Details:", response.json())
-                except:
-                    # Fallback to printing raw text
-                    print("Server Error Text:", response.text)
-
-            response.close() # Crucial: always close the response object
-
-        except Exception as e:
-            print(f"An error occurred during the POST request: {e}")
             
     ############################
     # Set up time/date
