@@ -102,9 +102,6 @@
 
 </head>
 <body>
-
-<h1>Sensor Data Plotter</h1>
-
 <div class="chart-container">
     <canvas id="sensorChart"></canvas>
 </div>
@@ -138,17 +135,17 @@
 </fieldset>
 
 <fieldset>
-    <legend><strong>Acquisition Controls</strong></legend>
-    <label for="refreshRate">Refresh:</label>
+    <label for="refreshRate">Refresh(secs):</label>
     <input type="number" id="refreshRate" value="30" min="1">
-    <span>seconds</span>
     
     <button id="toggleButton">Stop</button>
     <button id="clearButton">Clear Plot</button>
+    <br>
+    <button id="savePngButton">Save Plot as PNG</button>
+    <button id="saveCsvButton">Save Data as CSV</button>
     </fieldset>
 
 <fieldset class="checkbox-group">
-    <legend>Select Data to Plot</legend>
     <label>
         <input type="checkbox" class="data-checkbox" data-key="sens1_Temp" data-color="red" checked>
         Sensor 1 Temp
@@ -165,12 +162,6 @@
         <input type="checkbox" class="data-checkbox" data-key="sens1_RH" data-color="blue">
         Sensor 1 RH
     </label>
-</fieldset>
-
-<fieldset>
-    <legend><strong>Export</strong></legend>
-    <button id="savePngButton">Save Plot as PNG</button>
-    <button id="saveCsvButton">Save Data as CSV</button>
 </fieldset>
 
 <button id="simpleUIBtn">Simple UI</button>
