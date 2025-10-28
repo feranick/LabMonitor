@@ -1,10 +1,10 @@
  # **********************************************
 # * LabMonitor - Rasperry Pico W
-# * v2025.10.28.1
+# * v2025.10.28.2
 # * By: Nicola Ferralis <feranick@hotmail.com>
 # **********************************************
 
-version = "2025.10.28.1"
+version = "2025.10.28.2"
 
 import wifi
 import time
@@ -111,6 +111,15 @@ class LabServer:
         except Exception as e:
             print(f"Unexpected critical error: {e}")
             self.fail_reboot()
+            
+        try:
+            self.mongoURL = os.getenv("mongoURL")
+            self.submitToMongo = os.getenv("submitToMongo").lower() == "true"
+            # NEW: Load the secret key from settings.toml
+            self.mongoSecretKey = os.getenv("mongoSecretKey")
+        except:
+            self.submitToMongo = False
+            self.mongoSecretKey = None # Add this fallback
 
     def fail_reboot(self):
         print("Rebooting in 5 seconds due to error...")
@@ -282,8 +291,11 @@ class LabServer:
         headers = {
             'Content-Type': 'application/json',
             'Accept': 'application/json'
-            # 'Authorization': f'Bearer {custom_server_secret}' # Uncomment if your server uses a token
         }
+        
+        if self.mongoSecretKey:
+            headers['Authorization'] = f'Bearer {self.mongoSecretKey}'
+        
         try:
             response = self.requests.post(
                 url,

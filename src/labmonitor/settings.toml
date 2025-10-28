@@ -9,3 +9,4 @@ sensor2 = "MCP9808"
 sensor2TemperatureOffset = 0
 submitToMongo = "False"
 mongoURL = "https://www.site.com"
+mongoSecretKey = "super_secure_auth_token_12345"
