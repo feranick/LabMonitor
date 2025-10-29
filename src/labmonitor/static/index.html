@@ -37,7 +37,7 @@
         justify-content: center;
         align-items: center;
     }
-    button, input[type="number"] {
+    button, input[type="number"], input[type="text"] {
         font-size: 16px;
         padding: 8px 12px;
         border-radius: 8px;
@@ -56,7 +56,7 @@
         background-color: #006400; /* Green for 'Start' */
         border-color: #006400;
     }
-    /* --- NEW --- */
+
     button#clearButton {
         background-color: #a02c2c; /* Dark red */
         border-color: #a02c2c;
@@ -64,10 +64,13 @@
     button#clearButton:hover {
         background-color: #c93434;
     }
-    /* --- END NEW --- */
+
     input[type="number"] {
         width: 60px;
         text-align: center;
+    }
+    input[type="text"] {
+        width: 400px;
     }
     .checkbox-group legend {
         width: 100%; /* Ensure legend is on its own line */
@@ -135,7 +138,7 @@
 </fieldset>
 
 <fieldset>
-    <label for="refreshRate">Refresh(secs):</label>
+    <label for="refreshRate">Refresh (secs):</label>
     <input type="number" id="refreshRate" value="30" min="1">
     
     <button id="toggleButton">Stop</button>
@@ -145,7 +148,9 @@
     <button id="saveCsvButton">Save Data as CSV</button>
     <!--<input type="checkbox" class="submitMongo-checkbox" checked>-->
     </fieldset>
-
+<fieldset>
+    Comments: <input type="text" id="userComment">
+</fieldset>
 <fieldset class="checkbox-group">
     <label>
         <input type="checkbox" class="data-checkbox" data-key="sens1_Temp" data-color="red" checked>

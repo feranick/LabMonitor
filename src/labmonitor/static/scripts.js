@@ -318,10 +318,10 @@ function cleanAndAugmentData(data) {
     });
     
             
-    //const comment = userCommentElement.value.trim();
-    //if (comment) {
-    //    cleanData['user_comment'] = comment;
-    //}
+    const comment = document.getElementById('userComment').value.trim();
+    if (comment) {
+        cleanData['user_comment'] = comment;
+    }
             
     cleanData['client_submission_time'] = Date.now();
     return cleanData;
