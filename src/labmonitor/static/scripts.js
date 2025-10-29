@@ -176,8 +176,8 @@ async function updatePlot() {
         }
     
     // Clean data and submit to MongoDB
-    //console.log(data);
-    //submitData(data);
+    console.log(data);
+    submitData(data);
     
 }
 
@@ -352,6 +352,9 @@ async function submitData(data) {
                 },
                 body: JSON.stringify(cleanData)
             });
+            
+            console.log("DATA_SUB:");
+            console.log(cleanData);
 
             if (response.ok) {
                 const result = await response.json();
