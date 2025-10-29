@@ -1,5 +1,6 @@
 import os
 import json
+import configparser
 from flask import Flask, request, jsonify
 #from flask_cors import CORS # CRITICAL FIX 2: Missing 'CORS' import for CORS(app) -- Keep commented out to prevent CORS duplication
 from pymongo import MongoClient
@@ -10,15 +11,30 @@ from datetime import datetime
 # IMPORTANT: Replace these with your actual MongoDB connection details
 # NOTE: Using environment variables is the most secure method in production.
 # The format for an authenticated string is: mongodb://user:password@host:port/?authSource=LabMonitorDB
-MONGO_CONNECTION_STRING = os.getenv("MONGO_URL", "mongodb://localhost:27017/") 
+
+APP_DIR = os.path.dirname(os.path.abspath(__file__))
+CONFIG_PATH = os.path.join(APP_DIR, 'config.cfg')
+
+try:
+    # Read credentials from config.cfg
+    config = configparser.ConfigParser(allow_no_value=True)
+    with open(CONFIG_PATH, 'r') as f:
+        config.read_string(f'[DEFAULT]\n{f.read()}')
+    
+    MONGO_AUTH_STRING = config['DEFAULT'].get('MONGO_AUTH_STRING')
+    SECRET_KEY = config['DEFAULT'].get('SERVER_SECRET_KEY')
+    DATABASE_NAME =  config['DEFAULT'].get('DATABASE_NAME')
+    COLLECTION_NAME = config['DEFAULT'].get('COLLECTION_NAME')
+    REQUIRED_KEYS = config['DEFAULT'].get('REQUIRED_KEYS')
+    
+    print(f"[DEBUG] Configuration loaded successfully.")
+except Exception as e:
+    print(f"[CRITICAL ERROR] General error during configuration or MongoDB setup: {e}")
+
+MONGO_CONNECTION_STRING = os.getenv("MONGO_URL", "mongodb://localhost:27017/")
 
 # CRITICAL DEBUGGING LINE: Print the connection string being used to the Apache error log
 print(f"DEBUG: Using MONGO_CONNECTION_STRING: {MONGO_CONNECTION_STRING}")
-
-DATABASE_NAME = "LabMonitorDB"
-COLLECTION_NAME = "LabMonitor"
-
-SECRET_KEY = os.getenv("SERVER_SECRET_KEY")
 
 if not SECRET_KEY:
     # Fail fast if the secret is not configured.
@@ -27,9 +43,6 @@ if not SECRET_KEY:
     print("WARNING: SERVER_SECRET_KEY environment variable not set. Authorization features are disabled.")
 
 app = Flask(__name__)
-
-# CORS Setup: Disabled here. This is handled 100% by the Apache configuration (data_collector.conf).
-#CORS(app, origins=['http://192.168.1.203', 'https://carbonio.mit.edu', 'http://192.168.1.200'])
 
 # --- MongoDB Initialization ---
 try:
@@ -53,10 +66,6 @@ except (ConnectionFailure, OperationFailure) as e:
 except Exception as e:
     print(f"General error during MongoDB setup: {e}")
 
-
-# Client expects: https://carbonio.mit.edu/LabMonitorDB/api/submit-sensor-data
-# CRITICAL FIX: The WSGIScriptAlias handles /LabMonitorDB/api/. 
-# Flask only needs to handle the remaining path: /submit-sensor-data.
 @app.route('/submit-sensor-data', methods=['POST'])
 def receive_data():
     """Handles incoming JSON data from the client and inserts it into MongoDB."""
@@ -77,13 +86,9 @@ def receive_data():
 
     # 2. Data Validation and Preprocessing
     # (sens1_Temp, sens1_RH, UTC, and the required client-added fields).
-    required_keys = [
-        "sens1_type", "sens2_type", "version", "ip", 
-        "sens1_Temp", "sens2_Temp", "sens1_RH", "sens2_RH", 
-        "sens1_P", "sens2_P", "UTC", "client_submission_time"
-    ]
-    if not all(key in data for key in required_keys):
-        missing_keys = [key for key in required_keys if key not in data]
+   
+    if not all(key in data for key in REQUIRED_KEYS):
+        missing_keys = [key for key in REQUIRED_KEYS if key not in data]
         return jsonify({
             "message": "Missing required fields.",
             "missing": missing_keys

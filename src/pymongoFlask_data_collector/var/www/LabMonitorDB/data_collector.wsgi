@@ -32,13 +32,12 @@ try:
     
     MONGO_AUTH_STRING = config['DEFAULT'].get('MONGO_AUTH_STRING')
     SERVER_SECRET_KEY = config['DEFAULT'].get('SERVER_SECRET_KEY')
+    DATABASE_NAME =  config['DEFAULT'].get('DATABASE_NAME')
+    COLLECTION_NAME = config['DEFAULT'].get('COLLECTION_NAME')
+    ORIGINS = config['DEFAULT'].get('ORIGINS')
     
     print(f"[DEBUG] Configuration loaded successfully.")
 
-    # Establish MongoDB Connection
-    DATABASE_NAME = "LabMonitorDB"
-    COLLECTION_NAME = "LabMonitor"
-    
     client = MongoClient(MONGO_AUTH_STRING, serverSelectionTimeoutMS=5000)
     db = client[DATABASE_NAME]
     collection = db[COLLECTION_NAME]
@@ -60,7 +59,7 @@ app = Flask(__name__)
 
 # Configure CORS for the specific origins
 CORS(app, resources={
-    r"/submit-sensor-data": {"origins": ["http://192.168.1.203", "https://carbonio.mit.edu", "http://192.168.1.200"]}
+   r"/submit-sensor-data": {"origins": ORIGINS}
 })
 
 # ----------------------------------------------------
