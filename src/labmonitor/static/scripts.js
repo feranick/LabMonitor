@@ -118,7 +118,7 @@ async function updatePlot() {
     if (!isCollecting) return; 
 
     const data = await fetchData();
-    if (!data) return; 
+    if (!data) return;
 
     const timestamp = new Date(Math.round(data.UTC / 1e6));
 
@@ -174,6 +174,11 @@ async function updatePlot() {
     if (data.sens2_type != "sensor") {
         document.getElementById("sens2_Temp_current").style.color = "red";
         }
+    
+    // Clean data and submit to MongoDB
+    //console.log(data);
+    //submitData(data);
+    
 }
 
 //////////////////////////////////////////////
@@ -298,6 +303,82 @@ function exportToCsv() {
     document.body.removeChild(link);
 }
 
+//////////////////////////////////////////////
+// Clones the data and removes sensitive keys.
+// @param {object} data - The data object received from the Pico.
+// @returns {object} The cleaned data object ready for submission.
+//////////////////////////////////////////////
+function cleanAndAugmentData(data) {
+    const cleanData = { ...data };
+    
+    const EXCLUDED_KEYS = ["mongoURL", "submitToMongo"];
+            
+    EXCLUDED_KEYS.forEach(key => {
+        delete cleanData[key];
+    });
+    
+    cleanData['secret_key'] = "IhWITx3xEioA1RH6OKXGWBBcO1wyFbsI5s_tKMyAeDQ";
+            
+    //const comment = userCommentElement.value.trim();
+    //if (comment) {
+    //    cleanData['user_comment'] = comment;
+    //}
+            
+    cleanData['client_submission_time'] = Date.now();
+    return cleanData;
+}
+
+//////////////////////////////////////////////
+// Submits the CLEANED JSON data to the defined server endpoint using the Fetch API.
+// @param {object} data - The sensor data object to send.
+//////////////////////////////////////////////
+async function submitData(data) {
+    const cleanData = cleanAndAugmentData(data);
+    const FLASK_API_PATH = "/LabMonitorDB/api/submit-sensor-data";
+    const SERVER_BASE_URL = data.mongoURL;
+    const FULL_ENDPOINT_URL = SERVER_BASE_URL + FLASK_API_PATH;
+        
+    console.log(`Submitting data to ${FULL_ENDPOINT_URL}...`);
+
+    const maxRetries = 3;
+    let success = false;
+
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+        try {
+            const response = await fetch(FULL_ENDPOINT_URL, {
+                method: 'POST',
+                headers: {
+                'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(cleanData)
+            });
+
+            if (response.ok) {
+                const result = await response.json();
+                console.log(`Success! Data sent to server endpoint. Response: ${JSON.stringify(result)}`);
+                success = true;
+                break;
+            } else {
+                console.error(`Attempt ${attempt + 1}: Server responded with status ${response.status}`);
+                if (attempt < maxRetries - 1) {
+                    const delay = Math.pow(2, attempt) * 1000;
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                }
+            }
+
+        } catch (error) {
+            console.error(`Attempt ${attempt + 1}: Network error during submission:`, error);
+            if (attempt < maxRetries - 1) {
+                const delay = Math.pow(2, attempt) * 1000;
+                await new Promise(resolve => setTimeout(resolve, delay));
+            }
+        }
+    }
+
+    if (!success) {
+        console.log(`Error: Failed to submit data after ${maxRetries} attempts. Check server endpoint and console for details.`);
+    }
+    }
 
 //////////////////////////////////////////////
 // Page Load Event

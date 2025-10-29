@@ -1,4 +1,4 @@
- # **********************************************
+# **********************************************
 # * LabMonitor - Rasperry Pico W
 # * v2025.10.28.2
 # * By: Nicola Ferralis <feranick@hotmail.com>
@@ -115,11 +115,9 @@ class LabServer:
         try:
             self.mongoURL = os.getenv("mongoURL")
             self.submitToMongo = os.getenv("submitToMongo").lower() == "true"
-            self.mongoSecretKey = os.getenv("mongoSecretKey")
         except:
             self.self.mongoURL = None
             self.submitToMongo = False
-            self.mongoSecretKey = None
 
     def fail_reboot(self):
         print("Rebooting in 5 seconds due to error...")
@@ -197,9 +195,8 @@ class LabServer:
                 "ip": self.ip,
                 "version": version,
                 "UTC": UTC,
-                "submitToMongo", self.submitToMongo,
+                "submitToMongo": self.submitToMongo,
                 "mongoURL": self.mongoURL,
-                "mongoSecretKey": self.mongoSecretKey,
             }
 
             json_content = json.dumps(data_dict)
