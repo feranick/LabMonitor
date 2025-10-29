@@ -115,8 +115,8 @@ async function fetchData() {
 //////////////////////////////////////////////
 // Main Plot Update Logic
 //////////////////////////////////////////////
-async function updatePlot() {
-    if (!isCollecting) return; 
+async function updatePlot(flag) {
+    if (!isCollecting  && flag) return;
 
     const data = await fetchData();
     if (!data) return;
@@ -130,35 +130,9 @@ async function updatePlot() {
     const s2_Temp = parseFloat(data.sens2_Temp) || null;
     const s2_RH = parseFloat(data.sens2_RH) || null;
     const s1_WBT_string = getWebBulbTemp(data.sens1_Temp, data.sens1_RH, data.sens1_type);
-    const s1_WBT = parseFloat(s1_WBT_string) || null; 
-
-
-    // --- 2. Store data in our master history object ---
-    chartDataStore.labels.push(timestamp);
-    chartDataStore.isoLabels.push(timestamp.toISOString());
-    chartDataStore.sens1_Temp.push(s1_Temp);
-    chartDataStore.sens1_RH.push(s1_RH);
-    chartDataStore.sens1_WBT.push(s1_WBT);
-    chartDataStore.sens2_Temp.push(s2_Temp);
-    chartDataStore.sens2_RH.push(s2_RH);
-
-    // --- 3. Update the chart's shared X-axis ---
-    sensorChart.data.labels.push(timestamp);
-
-    // --- 4. Push new data ONLY to active datasets ---
-    sensorChart.data.datasets.forEach(dataset => {
-        const key = dataset.label;
-        if (key === 'sens1_Temp') dataset.data.push(s1_Temp);
-        if (key === 'sens1_RH') dataset.data.push(s1_RH);
-        if (key === 'sens1_WBT') dataset.data.push(s1_WBT);
-        if (key === 'sens2_Temp') dataset.data.push(s2_Temp);
-        if (key === 'sens2_RH') dataset.data.push(s2_RH);
-    });
-
-    // --- 5. Redraw the chart ---
-    sensorChart.update('none'); 
-
-    // --- 6. UPDATE CURRENT MEASUREMENTS ---
+    const s1_WBT = parseFloat(s1_WBT_string) || null;
+    
+    // --- 2. UPDATE CURRENT MEASUREMENTS ---
     document.getElementById("datetime_current").textContent = datetime;
     document.getElementById("sens1_Temp_current").textContent = data.sens1_Temp + " \u00B0C";
     document.getElementById("sens1_Temp_current").style.color = "#00008B";
@@ -175,11 +149,38 @@ async function updatePlot() {
     if (data.sens2_type != "sensor") {
         document.getElementById("sens2_Temp_current").style.color = "red";
         }
+
+    if (flag == true) {
+        // --- 3. Store data in our master history object ---
+        chartDataStore.labels.push(timestamp);
+        chartDataStore.isoLabels.push(timestamp.toISOString());
+        chartDataStore.sens1_Temp.push(s1_Temp);
+        chartDataStore.sens1_RH.push(s1_RH);
+        chartDataStore.sens1_WBT.push(s1_WBT);
+        chartDataStore.sens2_Temp.push(s2_Temp);
+        chartDataStore.sens2_RH.push(s2_RH);
+
+        // --- 4. Update the chart's shared X-axis ---
+        sensorChart.data.labels.push(timestamp);
+
+        // --- 5. Push new data ONLY to active datasets ---
+        sensorChart.data.datasets.forEach(dataset => {
+            const key = dataset.label;
+            if (key === 'sens1_Temp') dataset.data.push(s1_Temp);
+            if (key === 'sens1_RH') dataset.data.push(s1_RH);
+            if (key === 'sens1_WBT') dataset.data.push(s1_WBT);
+            if (key === 'sens2_Temp') dataset.data.push(s2_Temp);
+            if (key === 'sens2_RH') dataset.data.push(s2_RH);
+        });
+
+        // --- 6. Redraw the chart ---
+        sensorChart.update('none');
     
-    // Clean data and submit to MongoDB
-    if (document.getElementById('submitMongo-checkbox').checked) {
-        console.log(data);
-        submitData(data);
+        // Clean data and submit to MongoDB
+        if (document.getElementById('submitMongo-checkbox').checked) {
+            console.log(data);
+            submitData(data);
+            }
         }
 }
 
@@ -221,8 +222,13 @@ function startInterval() {
     const rateInput = document.getElementById("refreshRate");
     const refreshRate = (parseInt(rateInput.value, 10) || 30) * 1000;
     
-    updatePlot(); 
-    intervalId = setInterval(updatePlot, refreshRate);
+    updatePlot(true);
+    //intervalId = setInterval(updatePlot, refreshRate);
+    intervalId = setInterval( () => {
+        updatePlot(true);
+        },
+        refreshRate
+    );
     console.log(`Interval started with rate: ${refreshRate}ms`);
 }
 
@@ -257,7 +263,6 @@ function clearPlot() {
     sensorChart.update();
     console.log("Plot cleared.");
 }
-
 
 //////////////////////////////////////////////
 // Export Functions
@@ -394,12 +399,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Initialize the Chart ---
     initChart();
+    
+    // --- Get/Display current data ---
+    updatePlot(false);
 
     // --- Set up initial datasets ---
     updateVisibleDatasets();
 
     // --- Add Event Listeners ---
-    
     // Start/Stop Button
     toggleBtn.addEventListener('click', () => {
         isCollecting = !isCollecting;
