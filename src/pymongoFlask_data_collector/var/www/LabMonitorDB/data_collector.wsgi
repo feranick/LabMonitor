@@ -79,7 +79,7 @@ def submit_sensor_data():
             return jsonify({"message": "Missing JSON in request"}), 400
             
         data = request.get_json()
-        submitted_key = data.get('secret_key')
+        submitted_key = data.get('mongoSecretKey')
         
         if not submitted_key or submitted_key != SERVER_SECRET_KEY:
             print(f"[ERROR] Unauthorized access attempt.")

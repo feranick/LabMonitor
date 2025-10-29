@@ -97,8 +97,11 @@ class LabServer:
         try:
             self.submitToMongo = os.getenv("submitToMongo").lower() == "true"
             self.mongoURL = os.getenv("mongoURL")
+            self.mongoSecretKey = os.getenv("mongoSecretKey")
         except:
             self.submitToMongo = False
+            self.mongoURL = None
+            self.mongoSecretKey = None
             
         try:
             self.connect_wifi()
@@ -197,6 +200,7 @@ class LabServer:
                 "UTC": UTC,
                 "submitToMongo": self.submitToMongo,
                 "mongoURL": self.mongoURL,
+                "mongoSecretKey" : self.mongoSecretKey
             }
 
             json_content = json.dumps(data_dict)

@@ -317,7 +317,6 @@ function cleanAndAugmentData(data) {
         delete cleanData[key];
     });
     
-    cleanData['secret_key'] = "IhWITx3xEioA1RH6OKXGWBBcO1wyFbsI5s_tKMyAeDQ";
             
     //const comment = userCommentElement.value.trim();
     //if (comment) {

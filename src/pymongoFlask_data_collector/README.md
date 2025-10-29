@@ -62,7 +62,7 @@ You can generate a new key using this python code:
 import secrets
 print(secrets.token_urlsafe(32))
 ```
-
+Make sure that the key is also saved in the `settings.toml` file in the Pico.
 
 # Step 3: Create the WSGI Application Script (data_collector.wsgi)
 
