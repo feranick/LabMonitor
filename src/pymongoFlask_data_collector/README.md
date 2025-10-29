@@ -1,10 +1,10 @@
-#Lab Monitor Data Collector API Setup Guide (Flask, WSGI, PyMongo)
+# Lab Monitor Data Collector API Setup Guide (Flask, WSGI, PyMongo)
 
 This document provides a detailed, step-by-step guide for deploying the Lab Monitor Data Collector API, a Python/Flask application, using Apache HTTP Server and mod_wsgi.
 
 This guide implements a solution to securely manage MongoDB credentials and the API secret key via a dedicated configuration file (config.cfg), which is the most reliable way to bypass known environment variable injection issues in strict server configurations.
 
-#Prerequisites
+# Prerequisites
 
 Ensure the following components are installed and configured on your server:
 
@@ -18,15 +18,15 @@ Python 3: With pip.
 
 MongoDB: Running locally or accessible via the network, with the required user credentials.
 
-#Step 1: Create Application Directory and Install Dependencies
+# Step 1: Create Application Directory and Install Dependencies
 
-##A. Create a Secure Directory
+## A. Create a Secure Directory
 
 It is best practice to place the application outside the public DocumentRoot (/var/www/html) for security.
 
 `sudo mkdir /var/www/LabMonitorDB`
 
-##B. Setup Python Virtual Environment (CRITICAL)
+## B. Setup Python Virtual Environment (CRITICAL)
 
 Create and activate an isolated Python environment for the project. All subsequent pip install commands must be run while this environment is active.
 
@@ -37,14 +37,14 @@ Create and activate an isolated Python environment for the project. All subseque
 `source /var/www/LabMonitorDB/venv/bin/activate`
 
 
-##C. Install Python Libraries
+## C. Install Python Libraries
 
 Install the required Python packages (Flask, pymongo, flask-cors, configparser) into your environment.
 
 `sudo pip3 install flask pymongo flask-cors configparser`
 
 
-#Step 2: Configure Credentials (config.cfg)
+# Step 2: Configure Credentials (config.cfg)
 
 This file holds critical credentials and must be placed in the application root (`/var/www/LabMonitorDB`).
 
