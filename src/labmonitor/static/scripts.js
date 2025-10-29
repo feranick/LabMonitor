@@ -1,6 +1,7 @@
 let sensorChart;
 let intervalId;
 let isCollecting = true;
+let submitToMongo = true;
 
 // This object will store ALL data points, even for hidden datasets.
 const chartDataStore = {
@@ -176,9 +177,10 @@ async function updatePlot() {
         }
     
     // Clean data and submit to MongoDB
-    console.log(data);
-    submitData(data);
-    
+    if (document.getElementById('submitMongo-checkbox').checked) {
+        console.log(data);
+        submitData(data);
+        }
 }
 
 //////////////////////////////////////////////
@@ -232,7 +234,6 @@ function stopInterval() {
     }
 }
 
-// --- NEW FUNCTION ---
 //////////////////////////////////////////////
 // Clear Plot Data
 //////////////////////////////////////////////
@@ -256,7 +257,6 @@ function clearPlot() {
     sensorChart.update();
     console.log("Plot cleared.");
 }
-// --- END NEW FUNCTION ---
 
 
 //////////////////////////////////////////////
@@ -351,9 +351,6 @@ async function submitData(data) {
                 },
                 body: JSON.stringify(cleanData)
             });
-            
-            console.log("DATA_SUB:");
-            console.log(cleanData);
 
             if (response.ok) {
                 const result = await response.json();
@@ -394,7 +391,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const csvBtn = document.getElementById('saveCsvButton');
     const checkboxes = document.querySelectorAll('.data-checkbox');
     const sUIBtn = document.getElementById('simpleUIBtn');
-    
+
     // --- Initialize the Chart ---
     initChart();
 
@@ -435,7 +432,7 @@ document.addEventListener('DOMContentLoaded', () => {
     checkboxes.forEach(cb => {
         cb.addEventListener('change', updateVisibleDatasets);
     });
-
+    
     // Export Buttons
     pngBtn.addEventListener('click', exportToPng);
     csvBtn.addEventListener('click', exportToCsv);

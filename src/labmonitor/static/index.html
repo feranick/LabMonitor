@@ -138,19 +138,25 @@
 </fieldset>
 
 <fieldset>
+    Comments: <input type="text" id="userComment">
+</fieldset>
+
+<fieldset>
     <label for="refreshRate">Refresh (secs):</label>
     <input type="number" id="refreshRate" value="30" min="1">
     
     <button id="toggleButton">Stop</button>
     <button id="clearButton">Clear Plot</button>
+    
     <br>
     <button id="savePngButton">Save Plot as PNG</button>
     <button id="saveCsvButton">Save Data as CSV</button>
-    <!--<input type="checkbox" class="submitMongo-checkbox" checked>-->
+    
+    <br>
+    <div style="width: 100%; text-align: center; margin-top: 10px;">
+    <input type="checkbox" id="submitMongo-checkbox" checked>Save to Remote Server
+    </div>
     </fieldset>
-<fieldset>
-    Comments: <input type="text" id="userComment">
-</fieldset>
 <fieldset class="checkbox-group">
     <label>
         <input type="checkbox" class="data-checkbox" data-key="sens1_Temp" data-color="red" checked>
