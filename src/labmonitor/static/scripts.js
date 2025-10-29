@@ -1,6 +1,6 @@
 let sensorChart;
 let intervalId;
-let isCollecting = true;
+let isCollecting = false;
 let submitToMongo = true;
 
 // This object will store ALL data points, even for hidden datasets.
@@ -398,10 +398,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Set up initial datasets ---
     updateVisibleDatasets();
 
-    // --- Start Data Collection ---
-    isCollecting = true;
-    startInterval();
-
     // --- Add Event Listeners ---
     
     // Start/Stop Button
@@ -418,7 +414,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Clear Button (NEW)
+    // Clear Button
     clearBtn.addEventListener('click', clearPlot);
 
     // Refresh Rate Input
