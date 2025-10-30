@@ -413,7 +413,7 @@ async function submitData(data) {
     const FLASK_API_PATH = "/LabMonitorDB/api/submit-sensor-data";
     const SERVER_BASE_URL = data.mongoURL;
     const FULL_ENDPOINT_URL = SERVER_BASE_URL + FLASK_API_PATH;
-        
+            
     console.log(`Submitting data to ${FULL_ENDPOINT_URL}...`);
 
     const maxRetries = 3;

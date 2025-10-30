@@ -192,6 +192,7 @@ def get_data():
                 "sens2_RH": doc.get("sens2_RH"),
                 "sens2_P": doc.get("sens2_P"),
                 "sens2_type": doc.get("sens2_type"),
+                "device_name": doc.get("device_name"),
                 "user_comment": doc.get("user_comment", "")
             })
         
