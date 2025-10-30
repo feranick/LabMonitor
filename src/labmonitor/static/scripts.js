@@ -178,7 +178,6 @@ async function updatePlot(flag) {
     
         // Clean data and submit to MongoDB
         if (document.getElementById('submitMongo-checkbox').checked) {
-            console.log(data);
             submitData(data);
             }
         }
@@ -336,6 +335,7 @@ function cleanAndAugmentData(data) {
 //////////////////////////////////////////////
 async function submitData(data) {
     const cleanData = cleanAndAugmentData(data);
+    console.log(cleanData);
     const FLASK_API_PATH = "/LabMonitorDB/api/submit-sensor-data";
     const SERVER_BASE_URL = data.mongoURL;
     const FULL_ENDPOINT_URL = SERVER_BASE_URL + FLASK_API_PATH;
