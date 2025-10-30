@@ -11,7 +11,8 @@ const chartDataStore = {
     sens1_RH: [],
     sens1_WBT: [],
     sens2_Temp: [],
-    sens2_RH: []
+    sens2_RH: [],
+    userComments: []
 };
 
 ////////////////////////////////////
@@ -89,11 +90,69 @@ function initChart() {
                 tooltip: {
                     mode: 'index',
                     intersect: false,
+                    callbacks: {
+                        label: customTooltipLabel, // Keep your existing label function
+                        footer: customTooltipFooter
+                    }
                 }
             },
             animation: false
         }
     });
+}
+
+/**
+ * Generates the content for each line item in the tooltip.
+ * The custom data (like WBT or related RH/Temp) is fetched from chartDataStore.
+ */
+function customTooltipLabel(context) {
+    const dataIndex = context.dataIndex; // The index of the data point
+    const datasetKey = context.dataset.label; // e.g., 'sens1_Temp'
+    let lines = [];
+
+    // --- 1. Get the primary value and label (Chart.js default line) ---
+    let label = context.dataset.label + ': ' + context.formattedValue;
+    lines.push(label); 
+
+    // --- 2. Add extra data based on the dataset being hovered ---
+    if (datasetKey.includes('sens1')) {
+        // Show Sensor 1 Wet-Bulb Temp (WBT) for all Sensor 1 points
+        const wbtValue = chartDataStore.sens1_WBT[dataIndex];
+        if (wbtValue !== null) {
+            lines.push(`WBT: ${wbtValue} °C`);
+        }
+        
+        // If we're hovering over Temp, show the RH
+        if (datasetKey === 'sens1_Temp') {
+            const rhValue = chartDataStore.sens1_RH[dataIndex];
+            if (rhValue !== null) {
+                lines.push(`RH: ${rhValue}%`);
+            }
+        }
+    }
+    // similar logic for Sensor 2 here if needed.
+    return lines; 
+}
+
+function customTooltipFooter(tooltipItems) {
+    if (!tooltipItems || tooltipItems.length === 0) {
+        return '';
+    }
+    
+    const dataIndex = tooltipItems[0].dataIndex;
+    const storedComment = chartDataStore.userComments[dataIndex];
+    
+    const cleanComment = (storedComment || "").replace(/[\u0000-\u001F\u007F-\u009F]/g, "").trim();
+        
+    // Check if the stored comment is valid AND not our default placeholder
+    if (cleanComment.length > 0 && cleanComment.toUpperCase() !== "NO COMMENT") {
+        return [
+            '', 
+            'User Comment:', 
+            `"${cleanComment}"`
+        ];
+    }
+    return ''; 
 }
 
 //////////////////////////////////////////////
@@ -132,6 +191,16 @@ async function updatePlot(flag) {
     const s1_WBT_string = getWebBulbTemp(data.sens1_Temp, data.sens1_RH, data.sens1_type);
     const s1_WBT = parseFloat(s1_WBT_string) || null;
     
+    const commentElement = document.getElementById('userComment');
+    let userComment = "No comment"; // Default value
+
+    if (commentElement && commentElement.value) {
+        userComment = commentElement.value.trim();
+        if (userComment === "") {
+            userComment = "No comment";
+        }
+    }
+    
     // --- 2. UPDATE CURRENT MEASUREMENTS ---
     document.getElementById("datetime_current").textContent = datetime;
     document.getElementById("sens1_Temp_current").textContent = data.sens1_Temp + " \u00B0C";
@@ -149,7 +218,7 @@ async function updatePlot(flag) {
     if (data.sens2_type != "sensor") {
         document.getElementById("sens2_Temp_current").style.color = "red";
         }
-
+    
     if (flag == true) {
         // --- 3. Store data in our master history object ---
         chartDataStore.labels.push(timestamp);
@@ -159,6 +228,7 @@ async function updatePlot(flag) {
         chartDataStore.sens1_WBT.push(s1_WBT);
         chartDataStore.sens2_Temp.push(s2_Temp);
         chartDataStore.sens2_RH.push(s2_RH);
+        chartDataStore.userComments.push(userComment);
 
         // --- 4. Update the chart's shared X-axis ---
         sensorChart.data.labels.push(timestamp);
