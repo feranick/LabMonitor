@@ -1,0 +1,7 @@
+{
+  "name": "LabMonitor Viewer",
+  "short_name": "LabMonitorViewer",
+  "description": "LabMonitorViewer",
+  "start_url": ".",
+  "display": "standalone"
+}
