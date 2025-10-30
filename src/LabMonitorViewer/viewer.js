@@ -173,7 +173,8 @@ async function fetchAndDisplayData() {
 
         // 2. Loop through new data and populate the store
         dataArray.forEach(point => {
-            const timestamp = new Date(point.datetime_utc_pico);
+            //const timestamp = new Date(point.datetime_utc_pico);
+            const timestamp = new Date(Math.round(data.UTC / 1e6));
             const s1_WBT_string = getWebBulbTemp(point.sens1_Temp, point.sens1_RH, point.sens1_type);
 
             chartDataStore.labels.push(timestamp);
