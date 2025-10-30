@@ -316,13 +316,11 @@ function exportToCsv() {
 function cleanAndAugmentData(data) {
     const cleanData = { ...data };
     
-    const EXCLUDED_KEYS = ["mongoURL", "submitToMongo"];
-            
+    const EXCLUDED_KEYS = ["mongoURL"];
     EXCLUDED_KEYS.forEach(key => {
         delete cleanData[key];
     });
     
-            
     const comment = document.getElementById('userComment').value.trim();
     if (comment) {
         cleanData['user_comment'] = comment;

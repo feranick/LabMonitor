@@ -10,3 +10,4 @@ sensor2TemperatureOffset = 0
 submitToMongo = "False"
 mongoURL = "https://www.site.com"
 mongoSecretKey = "very_long_key"
+deviceName = "EnvironmentalChamber"

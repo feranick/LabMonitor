@@ -95,13 +95,13 @@ class LabServer:
         self.ip = "0.0.0.0"
         
         try:
-            self.submitToMongo = os.getenv("submitToMongo").lower() == "true"
             self.mongoURL = os.getenv("mongoURL")
             self.mongoSecretKey = os.getenv("mongoSecretKey")
+            self.deviceName = os.getenv("deviceName")
         except:
-            self.submitToMongo = False
             self.mongoURL = None
             self.mongoSecretKey = None
+            self.deviceName = None
             
         try:
             self.connect_wifi()
@@ -114,13 +114,6 @@ class LabServer:
         except Exception as e:
             print(f"Unexpected critical error: {e}")
             self.fail_reboot()
-            
-        try:
-            self.mongoURL = os.getenv("mongoURL")
-            self.submitToMongo = os.getenv("submitToMongo").lower() == "true"
-        except:
-            self.self.mongoURL = None
-            self.submitToMongo = False
 
     def fail_reboot(self):
         print("Rebooting in 5 seconds due to error...")
@@ -198,9 +191,9 @@ class LabServer:
                 "ip": self.ip,
                 "version": version,
                 "UTC": UTC,
-                "submitToMongo": self.submitToMongo,
                 "mongoURL": self.mongoURL,
-                "mongoSecretKey" : self.mongoSecretKey
+                "mongoSecretKey" : self.mongoSecretKey,
+                "device_name" : self.deviceName,
             }
 
             json_content = json.dumps(data_dict)
