@@ -57,9 +57,15 @@ except Exception as e:
 # ----------------------------------------------------
 app = Flask(__name__)
 
-# Configure CORS for the specific origins
+# Configure CORS for the specific origins - only POST
+#CORS(app, resources={
+#   r"/submit-sensor-data": {"origins": ORIGINS}
+#})
+
+# Configure CORS for the specific origins - POST/GET
 CORS(app, resources={
-   r"/submit-sensor-data": {"origins": ORIGINS}
+   r"/submit-sensor-data": {"origins": ORIGINS},
+   r"/get-data": {"origins": "*"}
 })
 
 # ----------------------------------------------------
@@ -127,6 +133,74 @@ def submit_sensor_data():
     except Exception as e:
         print(f"[CRITICAL ERROR] MongoDB Insert Error: {e}")
         return jsonify({"message": f"Internal server error during database insertion: {e}"}), 500
+
+# ----------------------------------------------------
+# 5. NEW DATA VIEWER ROUTE
+# ----------------------------------------------------
+@app.route('/get-data', methods=['GET'])
+def get_data():
+    
+    # 1. Ensure DB is available
+    if client is None:
+        return jsonify({"message": "Database service unavailable."}), 503
+
+    # 2. Get start and end dates from URL query parameters
+    # We expect ?start=YYYY-MM-DDTHH:MM&end=YYYY-MM-DDTHH:MM
+    try:
+        start_str = request.args.get('start')
+        end_str = request.args.get('end')
+
+        if not start_str or not end_str:
+            return jsonify({"message": "Missing 'start' or 'end' query parameters."}), 400
+
+        # Convert ISO strings to BSON datetime objects for MongoDB
+        # Note: We added the 'Z' to ensure UTC, but fromtimestamp is better
+        start_date = datetime.datetime.fromisoformat(start_str)
+        end_date = datetime.datetime.fromisoformat(end_str)
+
+    except Exception as e:
+        print(f"[ERROR] Invalid date format: {e}")
+        return jsonify({"message": f"Invalid date format. Use ISO format (YYYY-MM-DDTHH:MM): {e}"}), 400
+
+    # 3. Query MongoDB
+    try:
+        # Build the query. We are searching on the BSON date we created
+        # during submission ('datetime_utc_pico')
+        query = {
+            "datetime_utc_pico": {
+                "$gte": start_date,
+                "$lt": end_date
+            }
+        }
+        
+        # Sort by time, oldest first
+        cursor = collection.find(query).sort("datetime_utc_pico", 1)
+
+        # 4. Serialize the results
+        # We must convert BSON _id and datetime objects to strings
+        results = []
+        for doc in cursor:
+            # We must manually build the response to make it JSON-serializable
+            results.append({
+                "id": str(doc.get("_id")),
+                "datetime_utc_pico": doc.get("datetime_utc_pico").isoformat() + "Z",
+                "sens1_Temp": doc.get("sens1_Temp"),
+                "sens1_RH": doc.get("sens1_RH"),
+                "sens1_P": doc.get("sens1_P"),
+                "sens1_type": doc.get("sens1_type"),
+                "sens2_Temp": doc.get("sens2_Temp"),
+                "sens2_RH": doc.get("sens2_RH"),
+                "sens2_P": doc.get("sens2_P"),
+                "sens2_type": doc.get("sens2_type"),
+                "user_comment": doc.get("user_comment", "")
+            })
+        
+        print(f"[INFO] Fetched {len(results)} documents for date range.")
+        return jsonify(results), 200
+
+    except Exception as e:
+        print(f"[CRITICAL ERROR] MongoDB query error: {e}")
+        return jsonify({"message": f"Internal server error during data fetch: {e}"}), 500
 
 # ----------------------------------------------------
 # 5. WSGI Application Entry Point

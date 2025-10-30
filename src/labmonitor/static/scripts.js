@@ -201,6 +201,8 @@ async function updatePlot(flag) {
         }
     }
     
+    console.log(userComment);
+    
     // --- 2. UPDATE CURRENT MEASUREMENTS ---
     document.getElementById("datetime_current").textContent = datetime;
     document.getElementById("sens1_Temp_current").textContent = data.sens1_Temp + " \u00B0C";
@@ -393,6 +395,8 @@ function cleanAndAugmentData(data) {
     const comment = document.getElementById('userComment').value.trim();
     if (comment) {
         cleanData['user_comment'] = comment;
+    } else {
+        cleanData['user_comment'] = "";
     }
             
     cleanData['client_submission_time'] = Date.now();
