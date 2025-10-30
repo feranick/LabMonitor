@@ -75,7 +75,7 @@ function initChart() {
                     mode: 'index',
                     intersect: false,
                     callbacks: {
-                        label: customTooltipLabel, // Keep your existing label function
+                        label: customTooltipLabel,
                         footer: customTooltipFooter
                     }
                 }
