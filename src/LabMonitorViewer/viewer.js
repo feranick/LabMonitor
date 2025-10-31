@@ -1,4 +1,4 @@
-let version = "2025.10.30.1";
+let version = "2025.10.31.2";
 let sensorChart;
 let hoveredDataIndex = -1;
 
@@ -14,7 +14,7 @@ const chartDataStore = {
     userComments: []
 };
 
-// --- Utility (Copied from your scripts.js) ---
+// --- Utility ---
 function getWebBulbTemp(temp, rh, type) {
     if (type === 'sensor') {
         const T = parseFloat(temp);
@@ -34,7 +34,7 @@ function getWebBulbTemp(temp, rh, type) {
     }
 }
 
-// --- Chart Initialization (Copied from your scripts.js) ---
+// --- Chart Initialization ---
 function initChart() {
     const ctx = document.getElementById('sensorChart').getContext('2d');
     sensorChart = new Chart(ctx, {
@@ -86,13 +86,7 @@ function initChart() {
                 legend: {
                     position: 'top',
                 },
-            //},
                 zoom: {
-                    pan: {
-                        enabled: false, // Start with pan disabled
-                        mode: 'x',      // Pan only on the X (time) axis
-                        modifierKey: 'shift',
-                    },
                     zoom: {
                         wheel: {
                             enabled: false, // Optional: You can enable this for mouse wheel zoom
@@ -101,16 +95,26 @@ function initChart() {
                             enabled: false, // Optional: Enable for touch devices
                         },
                         drag: { // This enables the box-select zoom
-                            enabled: false, // Start with drag zoom disabled
+                            enabled: true, // Start with drag zoom disabled
                             borderColor: 'rgba(60, 60, 60, 0.5)',
                             borderWidth: 1,
                             backgroundColor: 'rgba(60, 60, 60, 0.2)',
-                            modifierKey: 'shift', // Set a modifier key (e.g., 'shift') if you want to keep the default drag behavior for panning, but we will use the button instead.
+                            modifierKey: null,
                         },
                         mode: 'xy', // Zoom only on the X (time) axis
+                    },
+                    pan: {
+                        enabled: true, // Start with pan disabled
+                        mode: 'xy',      // Pan only on the X (time) axis
+                        modifierKey: null,
                     }
                 },
-            }, //Added to move zoom into plugin
+            },
+            scales: {
+                x: {
+                    type: 'time',
+                }
+            },
             animation: false
         }
     });
@@ -166,6 +170,23 @@ async function fetchAndDisplayData() {
 
         // 3. Update the chart with all new data
         updateVisibleDatasets();
+        
+        // --- NEW: Explicitly Set X-Axis Bounds to Full Data Range ---
+        if (chartDataStore.labels.length > 0) {
+            const firstTimestamp = chartDataStore.labels[0];
+            const lastTimestamp = chartDataStore.labels.at(-1);
+            
+            // Set the min/max bounds for the X-axis
+            sensorChart.options.scales.x.min = firstTimestamp;
+            sensorChart.options.scales.x.max = lastTimestamp;
+
+            // Force a chart update to apply the new bounds
+            sensorChart.update('none'); // 'none' is often faster for options change
+
+            // Ensure zoom is reset to show the full defined range
+            sensorChart.resetZoom();
+            console.log("X-Axis bounds set and zoom reset.");
+        }
 
     } catch (error) {
         console.error('Error fetching data:', error);
@@ -175,7 +196,7 @@ async function fetchAndDisplayData() {
     }
 }
 
-// --- (Copied from your scripts.js) ---
+// --- Update Visible DataSets ---
 function updateVisibleDatasets() {
     const checkboxes = document.querySelectorAll('.data-checkbox');
     const newDatasets = [];
@@ -202,7 +223,7 @@ function updateVisibleDatasets() {
     sensorChart.update();
 }
 
-// --- (Copied from your scripts.js) ---
+// --- Clear Plot ---
 function clearPlot() {
     chartDataStore.labels = [];
     chartDataStore.isoLabels = [];
@@ -220,7 +241,7 @@ function clearPlot() {
     console.log("Plot cleared.");
 }
 
-// --- Export Functions (Copied from your scripts.js) ---
+// --- Export Functions ---
 function exportToPng() {
     const link = document.createElement('a');
     sensorChart.options.animation = false;
@@ -264,42 +285,33 @@ function exportToCsv() {
 
 // Function to toggle between Pan and Box Zoom modes
 function toggleZoomMode() {
-    //const isDragZoomEnabled = sensorChart.options.plugins.zoom.zoom.drag.enabled;
-    const newDragZoomEnabled = !sensorChart.options.plugins.zoom.zoom.drag.enabled;
+    const isPanEnabled = sensorChart.options.plugins.zoom.pan.enabled;
     
     // Toggle the drag zoom setting
-    //sensorChart.options.plugins.zoom.zoom.drag.enabled = !isDragZoomEnabled;
-    sensorChart.options.plugins.zoom.zoom.drag.enabled = newDragZoomEnabled;
-
+    sensorChart.options.plugins.zoom.pan.enabled = !isPanEnabled;
+    
     // Disable pan mode when drag zoom is enabled
-    //sensorChart.options.plugins.zoom.pan.enabled = isDragZoomEnabled;
-    sensorChart.options.plugins.zoom.pan.enabled = !newDragZoomEnabled;
+    sensorChart.options.plugins.zoom.zoom.drag.enabled = isPanEnabled;
     
     const canvas = document.getElementById('sensorChart');
-
     const zoomButton = document.getElementById('zoomButton');
     
-    //if (sensorChart.options.plugins.zoom.zoom.drag.enabled) {
-    //    // Change button to indicate the current mode is "select and zoom"
-    //    zoomButton.textContent = "Zoom In (Drag Mode ON)";
-    if (newDragZoomEnabled) {
+    if (sensorChart.options.plugins.zoom.zoom.drag.enabled) {
         // CURRENT Mode: Drag-to-Zoom
-        zoomButton.textContent = "Mode: Zoom (Click to Pan)";
+        zoomButton.textContent = "Zoom (Click to Pan)";
         zoomButton.style.backgroundColor = '#006400'; // Green
         zoomButton.style.borderColor = '#006400';
         canvas.style.cursor = 'crosshair';
         console.log("Drag Zoom mode activated.");
     } else {
-        //zoomButton.textContent = "Pan (Drag Mode OFF)";
         // CURRENT Mode: Pan
-        zoomButton.textContent = "Mode: Pan (Click to Zoom)";
+        zoomButton.textContent = "Pan (Click to Zoom)";
         zoomButton.style.backgroundColor = '#155084'; // Blue
         zoomButton.style.borderColor = '#155084';
         canvas.style.cursor = 'move'; // For Pan
         console.log("Pan mode activated.");
     }
-    // Update chart (though technically not required for options change, it's good practice)
-    //sensorChart.update();
+
     sensorChart.update('none'); 
 }
 
@@ -329,7 +341,7 @@ document.addEventListener('DOMContentLoaded', () => {
     updateVisibleDatasets(); 
 
     // Initialize the Zoom button text and state
-    toggleZoomMode(); // Sets the initial state to "Pan (Drag Mode OFF)" or adjust as needed
+    toggleZoomMode();
 
     // --- Add Event Listeners ---
     fetchDataBtn.addEventListener('click', fetchAndDisplayData);
@@ -392,7 +404,7 @@ const FixedInfoPlugin = {
             lines.push(`Comment: "${comment}"`);
         }
 
-        // --- Draw the Box (Optional but helps visibility) ---
+        // --- Draw the Box ---
         const lineHeight = 18;
         const padding = 10;
         const boxWidth = 250;
@@ -423,5 +435,5 @@ const FixedInfoPlugin = {
     }
 };
 
-// IMPORTANT: Register the plugin
+// Register the plugin
 Chart.register(FixedInfoPlugin);
