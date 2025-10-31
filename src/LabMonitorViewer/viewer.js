@@ -14,26 +14,6 @@ const chartDataStore = {
     userComments: []
 };
 
-// --- Utility ---
-function getWebBulbTemp(temp, rh, type) {
-    if (type === 'sensor') {
-        const T = parseFloat(temp);
-        const RH = parseFloat(rh);
-        if (isNaN(T) || isNaN(RH)) {
-            return "--";
-        }
-        let term1 = T * Math.atan(0.151977 * Math.sqrt(RH + 8.313659));
-        let term2 = Math.atan(T + RH);
-        let term3 = Math.atan(RH - 1.676331);
-        let term4 = 0.00391838 * Math.pow(RH, 1.5) * Math.atan(0.023101 * RH);
-        let term5 = 4.686035;
-        let Tw = term1 + term2 - term3 + term4 - term5;
-        return Tw.toFixed(1);
-    } else {
-        return "--";
-    }
-}
-
 // --- Chart Initialization ---
 function initChart() {
     const ctx = document.getElementById('sensorChart').getContext('2d');
@@ -321,6 +301,21 @@ function resetZoom() {
     console.log("Zoom reset.");
 }
 
+// Function to get Current Date and Time
+function setCurrentEndDateTime() {
+  const now = new Date();
+
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0'); // Months are 0-indexed
+  const day = String(now.getDate()).padStart(2, '0');
+
+  // Get the time part (hh:mm)
+  const hours = String(now.getHours()).padStart(2, '0');
+  const minutes = String(now.getMinutes()).padStart(2, '0');
+
+  document.getElementById('endDate').value = `${year}-${month}-${day}T${hours}:${minutes}`;
+}
+
 // --- Page Load Event ---
 document.addEventListener('DOMContentLoaded', () => {
     document.getElementById("version").textContent = version;
@@ -344,7 +339,22 @@ document.addEventListener('DOMContentLoaded', () => {
     toggleZoomMode();
 
     // --- Add Event Listeners ---
-    fetchDataBtn.addEventListener('click', fetchAndDisplayData);
+    //fetchDataBtn.addEventListener('click', fetchAndDisplayData);
+    
+    fetchDataBtn.addEventListener('click', (event) => {
+        if (event.shiftKey || event.metaKey) {
+            console.log('Use end date/times as displayed');
+            const endInput = document.getElementById('endDate').value;
+            // Optional: Prevent the default action (like opening a new tab on Ctrl+Click)
+            // event.preventDefault();
+            setCurrentEndDateTime();
+        } else {
+            console.log('Use the current date/time as endDate');
+            setCurrentEndDateTime();
+        }
+        fetchAndDisplayData();
+    });
+    
     clearBtn.addEventListener('click', clearPlot);
     pngBtn.addEventListener('click', exportToPng);
     csvBtn.addEventListener('click', exportToCsv);
@@ -437,3 +447,23 @@ const FixedInfoPlugin = {
 
 // Register the plugin
 Chart.register(FixedInfoPlugin);
+
+// --- Utility ---
+function getWebBulbTemp(temp, rh, type) {
+    if (type === 'sensor') {
+        const T = parseFloat(temp);
+        const RH = parseFloat(rh);
+        if (isNaN(T) || isNaN(RH)) {
+            return "--";
+        }
+        let term1 = T * Math.atan(0.151977 * Math.sqrt(RH + 8.313659));
+        let term2 = Math.atan(T + RH);
+        let term3 = Math.atan(RH - 1.676331);
+        let term4 = 0.00391838 * Math.pow(RH, 1.5) * Math.atan(0.023101 * RH);
+        let term5 = 4.686035;
+        let Tw = term1 + term2 - term3 + term4 - term5;
+        return Tw.toFixed(1);
+    } else {
+        return "--";
+    }
+}
