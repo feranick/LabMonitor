@@ -6,8 +6,12 @@
 <meta name="mobile-web-app-capable" content="yes" />
 <link rel="icon" type="image/x-icon" href="./favicon.ico">
 <link rel="icon" href="./icon.png">
-<link rel="apple-touch-icon" href="./icon192.png">
+<link rel="apple-touch-icon" href="./icon180.png">
 <link rel="manifest" href="./manifest.json">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
 <style>
     body {
         font-family: Helvetica, sans-serif;
@@ -100,8 +104,6 @@
     }
     small { display: block; margin-top: 5px; }
 </style>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
 
 </head>
 <body>
@@ -147,8 +149,10 @@
     
     <button id="toggleButton" class="stopped">Start</button>
     <button id="clearButton">Clear Plot</button>
-    
-    <br>
+    <div style="width: 100%; text-align: center;">
+    <button id="zoomButton">Toggle Pan/Zoom</button>
+    <button id="resetZoomButton">Reset Zoom</button>
+    </div>
     <div style="width: 100%; text-align: center;">
     <button id="savePngButton">Save Plot as PNG</button>
     <button id="saveCsvButton">Save Data as CSV</button>

@@ -330,8 +330,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const clearBtn = document.getElementById('clearButton');
     const pngBtn = document.getElementById('savePngButton');
     const csvBtn = document.getElementById('saveCsvButton');
-    const zoomBtn = document.getElementById('zoomButton'); // NEW
-    const resetZoomBtn = document.getElementById('resetZoomButton'); // NEW
+    const zoomBtn = document.getElementById('zoomButton');
+    const resetZoomBtn = document.getElementById('resetZoomButton'); 
     const checkboxes = document.querySelectorAll('.data-checkbox');
     
     const canvas = document.getElementById('sensorChart');
