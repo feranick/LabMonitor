@@ -1,5 +1,6 @@
 let version = "2025.10.30.1";
 let sensorChart;
+let hoveredDataIndex = -1;
 
 // This object will store ALL data points, just like before.
 const chartDataStore = {
@@ -67,79 +68,53 @@ function initChart() {
                     beginAtZero: false
                 }
             },
+            onHover: (event, elements, chart) => {
+                if (elements.length > 0) {
+                    // Update the global index if an element is hovered
+                    hoveredDataIndex = elements[0].index;
+                } else {
+                    // Reset the global index if the mouse moves off a point
+                    hoveredDataIndex = -1;
+                }
+                // Force a chart redraw to update the plugin text
+                chart.draw(); 
+            },
             plugins: {
+                tooltip: {
+                    enabled: false
+                },
                 legend: {
                     position: 'top',
                 },
-                tooltip: {
-                    mode: 'index',
-                    intersect: false,
-                    callbacks: {
-                        label: customTooltipLabel,
-                        footer: customTooltipFooter
-                    }
-                }
             },
+            zoom: {
+                    pan: {
+                        enabled: false, // Start with pan disabled
+                        mode: 'x',      // Pan only on the X (time) axis
+                    },
+                    zoom: {
+                        wheel: {
+                            enabled: false, // Optional: You can enable this for mouse wheel zoom
+                        },
+                        pinch: {
+                            enabled: false, // Optional: Enable for touch devices
+                        },
+                        drag: { // This enables the box-select zoom
+                            enabled: false, // Start with drag zoom disabled
+                            borderColor: 'rgba(60, 60, 60, 0.5)',
+                            borderWidth: 1,
+                            backgroundColor: 'rgba(60, 60, 60, 0.2)',
+                            modifierKey: 'shift', // Set a modifier key (e.g., 'shift') if you want to keep the default drag behavior for panning, but we will use the button instead.
+                        },
+                        mode: 'x', // Zoom only on the X (time) axis
+                    }
+                },
             animation: false
         }
     });
 }
 
-/**
- * Generates the content for each line item in the tooltip.
- * The custom data (like WBT or related RH/Temp) is fetched from chartDataStore.
- */
-function customTooltipLabel(context) {
-    const dataIndex = context.dataIndex; // The index of the data point
-    const datasetKey = context.dataset.label; // e.g., 'sens1_Temp'
-    let lines = [];
-
-    // --- 1. Get the primary value and label (Chart.js default line) ---
-    let label = context.dataset.label + ': ' + context.formattedValue;
-    lines.push(label); 
-
-    // --- 2. Add extra data based on the dataset being hovered ---
-    if (datasetKey.includes('sens1')) {
-        // Show Sensor 1 Wet-Bulb Temp (WBT) for all Sensor 1 points
-        const wbtValue = chartDataStore.sens1_WBT[dataIndex];
-        if (wbtValue !== null) {
-            lines.push(`WBT: ${wbtValue} °C`);
-        }
-        
-        // If we're hovering over Temp, show the RH
-        if (datasetKey === 'sens1_Temp') {
-            const rhValue = chartDataStore.sens1_RH[dataIndex];
-            if (rhValue !== null) {
-                lines.push(`RH: ${rhValue}%`);
-            }
-        }
-    }
-    // similar logic for Sensor 2 here if needed.
-    return lines; 
-}
-
-function customTooltipFooter(tooltipItems) {
-    if (!tooltipItems || tooltipItems.length === 0) {
-        return '';
-    }
-    
-    const dataIndex = tooltipItems[0].dataIndex;
-    const storedComment = chartDataStore.userComments[dataIndex];
-    
-    const cleanComment = (storedComment || "").replace(/[\u0000-\u001F\u007F-\u009F]/g, "").trim();
-        
-    // Check if the stored comment is valid AND not our default placeholder
-    if (cleanComment.length > 0 && cleanComment.toUpperCase() !== "NO COMMENT") {
-        return [
-            '', 
-            'User Comment:', 
-            `"${cleanComment}"`
-        ];
-    }
-    return ''; 
-}
-
-// --- NEW: Function to fetch and process data ---
+// --- Function to fetch and process data ---
 async function fetchAndDisplayData() {
     const startInput = document.getElementById('startDate').value;
     const endInput = document.getElementById('endDate').value;
@@ -184,7 +159,7 @@ async function fetchAndDisplayData() {
             chartDataStore.sens1_WBT.push(parseFloat(s1_WBT_string) || null);
             chartDataStore.sens2_Temp.push(parseFloat(point.sens2_Temp) || null);
             chartDataStore.sens2_RH.push(parseFloat(point.sens2_RH) || null);
-            chartDataStore.userComments.push(point.user_comment) || null);
+            chartDataStore.userComments.push(point.user_comment);
         });
 
         // 3. Update the chart with all new data
@@ -285,8 +260,41 @@ function exportToCsv() {
     document.body.removeChild(link);
 }
 
+// Function to toggle between Pan and Box Zoom modes
+function toggleZoomMode() {
+    const isDragZoomEnabled = sensorChart.options.plugins.zoom.zoom.drag.enabled;
+    
+    // Toggle the drag zoom setting
+    sensorChart.options.plugins.zoom.zoom.drag.enabled = !isDragZoomEnabled;
+    
+    // Disable pan mode when drag zoom is enabled
+    sensorChart.options.plugins.zoom.pan.enabled = isDragZoomEnabled;
 
-// --- NEW: Page Load Event ---
+    const zoomButton = document.getElementById('zoomButton');
+    if (sensorChart.options.plugins.zoom.zoom.drag.enabled) {
+        // Change button to indicate the current mode is "select and zoom"
+        zoomButton.textContent = "Zoom In (Drag Mode ON)";
+        zoomButton.style.backgroundColor = '#006400'; // Green
+        zoomButton.style.borderColor = '#006400';
+        console.log("Drag Zoom mode activated.");
+    } else {
+        // Change button to indicate the current mode is "pan"
+        zoomButton.textContent = "Pan (Drag Mode OFF)";
+        zoomButton.style.backgroundColor = '#155084'; // Blue
+        zoomButton.style.borderColor = '#155084';
+        console.log("Pan mode activated.");
+    }
+    // Update chart (though technically not required for options change, it's good practice)
+    sensorChart.update(); 
+}
+
+// Function to reset the zoom
+function resetZoom() {
+    sensorChart.resetZoom();
+    console.log("Zoom reset.");
+}
+
+// --- Page Load Event ---
 document.addEventListener('DOMContentLoaded', () => {
     document.getElementById("version").textContent = version;
     
@@ -295,17 +303,24 @@ document.addEventListener('DOMContentLoaded', () => {
     const clearBtn = document.getElementById('clearButton');
     const pngBtn = document.getElementById('savePngButton');
     const csvBtn = document.getElementById('saveCsvButton');
+    const zoomBtn = document.getElementById('zoomButton'); // NEW
+    const resetZoomBtn = document.getElementById('resetZoomButton'); // NEW
     const checkboxes = document.querySelectorAll('.data-checkbox');
 
     // --- Initialize the Chart ---
     initChart();
-    updateVisibleDatasets(); // Show an empty chart
+    updateVisibleDatasets(); 
+
+    // Initialize the Zoom button text and state
+    toggleZoomMode(); // Sets the initial state to "Pan (Drag Mode OFF)" or adjust as needed
 
     // --- Add Event Listeners ---
     fetchDataBtn.addEventListener('click', fetchAndDisplayData);
     clearBtn.addEventListener('click', clearPlot);
     pngBtn.addEventListener('click', exportToPng);
     csvBtn.addEventListener('click', exportToCsv);
+    zoomBtn.addEventListener('click', toggleZoomMode); // NEW
+    resetZoomBtn.addEventListener('click', resetZoom); // NEW
 
     checkboxes.forEach(cb => {
         cb.addEventListener('change', updateVisibleDatasets);
@@ -326,3 +341,70 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('startDate').value = toLocalISOString(startDate);
     document.getElementById('endDate').value = toLocalISOString(endDate);
 });
+
+const FixedInfoPlugin = {
+    id: 'fixedInfoDisplay',
+    afterDraw(chart, args, options) {
+        if (hoveredDataIndex === -1) {
+            return; // Only draw if a point is hovered
+        }
+
+        const ctx = chart.ctx;
+        const { chartArea, width, height } = chart;
+        
+        // --- Get Data for the Hovered Index ---
+        const index = hoveredDataIndex;
+        const timeLabel = chartDataStore.labels[index]?.toLocaleTimeString() || "N/A";
+        const temp1 = chartDataStore.sens1_Temp[index];
+        const wbt1 = chartDataStore.sens1_WBT[index];
+        const rh1 = chartDataStore.sens1_RH[index];
+        const temp2 = chartDataStore.sens2_Temp[index];
+        const comment = (chartDataStore.userComments[index] || "").trim();
+
+        // --- Prepare Text Lines ---
+        let lines = [
+            `Time: ${timeLabel}`,
+            `S1 Temp: ${temp1 !== null ? temp1 + ' °C' : '--'}`,
+            `S1 WBT: ${wbt1 !== null ? wbt1 + ' °C' : '--'}`,
+            `S1 RH: ${rh1 !== null ? rh1 + ' %' : '--'}`,
+            `S2 Temp: ${temp2 !== null ? temp2 + ' °C' : '--'}`,
+        ];
+        
+        // Add comment only if it exists and isn't the default placeholder
+        if (comment.length > 0 && comment.toUpperCase() !== "NO COMMENT") {
+            lines.push(`Comment: "${comment}"`);
+        }
+
+        // --- Draw the Box (Optional but helps visibility) ---
+        const lineHeight = 18;
+        const padding = 10;
+        const boxWidth = 250;
+        const boxHeight = (lines.length * lineHeight) + (padding * 2);
+        
+        // Position the box in the bottom-left corner
+        const x = chartArea.left;
+        const y = chartArea.bottom - boxHeight;
+
+        // Draw background box
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+        ctx.fillRect(x, y, boxWidth, boxHeight);
+        ctx.strokeStyle = '#333';
+        ctx.strokeRect(x, y, boxWidth, boxHeight);
+
+        // --- Draw the Text ---
+        ctx.font = '14px sans-serif';
+        ctx.fillStyle = 'black';
+        ctx.textAlign = 'left';
+        
+        lines.forEach((line, i) => {
+            ctx.fillText(
+                line, 
+                x + padding, 
+                y + padding + (i * lineHeight) + 14 // 14 for font height adjustment
+            );
+        });
+    }
+};
+
+// IMPORTANT: Register the plugin
+Chart.register(FixedInfoPlugin);
