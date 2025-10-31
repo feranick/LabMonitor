@@ -86,11 +86,12 @@ function initChart() {
                 legend: {
                     position: 'top',
                 },
-            },
-            zoom: {
+            //},
+                zoom: {
                     pan: {
                         enabled: false, // Start with pan disabled
                         mode: 'x',      // Pan only on the X (time) axis
+                        modifierKey: 'shift',
                     },
                     zoom: {
                         wheel: {
@@ -106,9 +107,10 @@ function initChart() {
                             backgroundColor: 'rgba(60, 60, 60, 0.2)',
                             modifierKey: 'shift', // Set a modifier key (e.g., 'shift') if you want to keep the default drag behavior for panning, but we will use the button instead.
                         },
-                        mode: 'x', // Zoom only on the X (time) axis
+                        mode: 'xy', // Zoom only on the X (time) axis
                     }
                 },
+            }, //Added to move zoom into plugin
             animation: false
         }
     });
@@ -262,30 +264,43 @@ function exportToCsv() {
 
 // Function to toggle between Pan and Box Zoom modes
 function toggleZoomMode() {
-    const isDragZoomEnabled = sensorChart.options.plugins.zoom.zoom.drag.enabled;
+    //const isDragZoomEnabled = sensorChart.options.plugins.zoom.zoom.drag.enabled;
+    const newDragZoomEnabled = !sensorChart.options.plugins.zoom.zoom.drag.enabled;
     
     // Toggle the drag zoom setting
-    sensorChart.options.plugins.zoom.zoom.drag.enabled = !isDragZoomEnabled;
-    
+    //sensorChart.options.plugins.zoom.zoom.drag.enabled = !isDragZoomEnabled;
+    sensorChart.options.plugins.zoom.zoom.drag.enabled = newDragZoomEnabled;
+
     // Disable pan mode when drag zoom is enabled
-    sensorChart.options.plugins.zoom.pan.enabled = isDragZoomEnabled;
+    //sensorChart.options.plugins.zoom.pan.enabled = isDragZoomEnabled;
+    sensorChart.options.plugins.zoom.pan.enabled = !newDragZoomEnabled;
+    
+    const canvas = document.getElementById('sensorChart');
 
     const zoomButton = document.getElementById('zoomButton');
-    if (sensorChart.options.plugins.zoom.zoom.drag.enabled) {
-        // Change button to indicate the current mode is "select and zoom"
-        zoomButton.textContent = "Zoom In (Drag Mode ON)";
+    
+    //if (sensorChart.options.plugins.zoom.zoom.drag.enabled) {
+    //    // Change button to indicate the current mode is "select and zoom"
+    //    zoomButton.textContent = "Zoom In (Drag Mode ON)";
+    if (newDragZoomEnabled) {
+        // CURRENT Mode: Drag-to-Zoom
+        zoomButton.textContent = "Mode: Zoom (Click to Pan)";
         zoomButton.style.backgroundColor = '#006400'; // Green
         zoomButton.style.borderColor = '#006400';
+        canvas.style.cursor = 'crosshair';
         console.log("Drag Zoom mode activated.");
     } else {
-        // Change button to indicate the current mode is "pan"
-        zoomButton.textContent = "Pan (Drag Mode OFF)";
+        //zoomButton.textContent = "Pan (Drag Mode OFF)";
+        // CURRENT Mode: Pan
+        zoomButton.textContent = "Mode: Pan (Click to Zoom)";
         zoomButton.style.backgroundColor = '#155084'; // Blue
         zoomButton.style.borderColor = '#155084';
+        canvas.style.cursor = 'move'; // For Pan
         console.log("Pan mode activated.");
     }
     // Update chart (though technically not required for options change, it's good practice)
-    sensorChart.update(); 
+    //sensorChart.update();
+    sensorChart.update('none'); 
 }
 
 // Function to reset the zoom
@@ -306,6 +321,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const zoomBtn = document.getElementById('zoomButton'); // NEW
     const resetZoomBtn = document.getElementById('resetZoomButton'); // NEW
     const checkboxes = document.querySelectorAll('.data-checkbox');
+    
+    const canvas = document.getElementById('sensorChart');
 
     // --- Initialize the Chart ---
     initChart();
