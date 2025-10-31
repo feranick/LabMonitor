@@ -159,7 +159,7 @@ async function fetchAndDisplayData() {
             chartDataStore.sens1_WBT.push(parseFloat(s1_WBT_string) || null);
             chartDataStore.sens2_Temp.push(parseFloat(point.sens2_Temp) || null);
             chartDataStore.sens2_RH.push(parseFloat(point.sens2_RH) || null);
-            chartDataStore.userComments.push(point.user_comment);
+            chartDataStore.userComments.push(point.user_comment || "");
         });
 
         // 3. Update the chart with all new data
