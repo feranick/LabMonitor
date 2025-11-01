@@ -1,4 +1,4 @@
-let version = "2025.10.31.2";
+let version = "2025.11.1.1";
 let sensorChart;
 let hoveredDataIndex = -1;
 

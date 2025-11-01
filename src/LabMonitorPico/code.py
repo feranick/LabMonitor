@@ -1,10 +1,10 @@
 # **********************************************
 # * LabMonitor - Rasperry Pico W
-# * v2025.10.31.2
+# * v2025.11.1.1
 # * By: Nicola Ferralis <feranick@hotmail.com>
 # **********************************************
 
-version = "2025.10.31.2"
+version = "2025.11.1.1"
 
 import wifi
 import time
@@ -19,7 +19,7 @@ import ssl
 import json
 
 import adafruit_requests
-from adafruit_httpserver import Server, MIMETypes, Response
+from adafruit_httpserver import Server, MIMETypes, Response, GET, POST, JSONResponse
 
 import adafruit_ntp
 
@@ -167,36 +167,15 @@ class LabServer:
             return self._serve_static_file(request, 'static/simple.html')
 
         # Status Check Route (Placeholder)
-        @self.server.route("/status")
+        @self.server.route("/status", methods=[GET])
         def update_status(request):
             # Use simplified Response for 200 OK
             return Response(request, "OK")
 
-        @self.server.route("/api/status")
+        @self.server.route("/api/status", methods=[GET])
         def api_status(request):
-            sensData1 = self.sensors.getData(self.sensors.envSensor1, self.sensors.envSensorName1, self.sensors.temp_offset1)
-            sensData2 = self.sensors.getData(self.sensors.envSensor2, self.sensors.envSensorName2, self.sensors.temp_offset2)
-
-            UTC = self.getUTC()
-
-            data_dict = {
-                "sens1_Temp": sensData1['temperature'],
-                "sens1_RH": sensData1['RH'],
-                "sens1_P": sensData1['pressure'],
-                "sens1_type": sensData1['type'],
-                "sens2_Temp": sensData2['temperature'],
-                "sens2_RH": sensData2['RH'],
-                "sens2_P": sensData2['pressure'],
-                "sens2_type": sensData2['type'],
-                "ip": self.ip,
-                "version": version,
-                "UTC": UTC,
-                "mongoURL": self.mongoURL,
-                "mongoSecretKey" : self.mongoSecretKey,
-                "device_name" : self.deviceName,
-            }
-
-            json_content = json.dumps(data_dict)
+            
+            json_content = self.assembleJson()
             print(json_content)
 
             headers = {"Content-Type": "application/json"}
@@ -276,6 +255,30 @@ class LabServer:
                 print(f"Unexpected critical error in server poll: {e}")
 
             time.sleep(0.01)
+            
+    def assembleJson(self):
+        sensData1 = self.sensors.getData(self.sensors.envSensor1, self.sensors.envSensorName1, self.sensors.temp_offset1)
+        sensData2 = self.sensors.getData(self.sensors.envSensor2, self.sensors.envSensorName2, self.sensors.temp_offset2)
+
+        UTC = self.getUTC()
+
+        data_dict = {
+            "sens1_Temp": sensData1['temperature'],
+            "sens1_RH": sensData1['RH'],
+            "sens1_P": sensData1['pressure'],
+            "sens1_type": sensData1['type'],
+            "sens2_Temp": sensData2['temperature'],
+            "sens2_RH": sensData2['RH'],
+            "sens2_P": sensData2['pressure'],
+            "sens2_type": sensData2['type'],
+            "ip": self.ip,
+            "version": version,
+            "UTC": UTC,
+            "mongoURL": self.mongoURL,
+            "mongoSecretKey" : self.mongoSecretKey,
+            "device_name" : self.deviceName,
+            }
+        return json.dumps(data_dict)
             
     ############################
     # Set up time/date
