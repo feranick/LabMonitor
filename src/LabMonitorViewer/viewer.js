@@ -69,23 +69,23 @@ function initChart() {
                 zoom: {
                     zoom: {
                         wheel: {
-                            enabled: false, // Optional: You can enable this for mouse wheel zoom
+                            enabled: true, //Mouse wheel zoom
                         },
                         pinch: {
-                            enabled: false, // Optional: Enable for touch devices
+                            enabled: true, // Touch devices
                         },
-                        drag: { // This enables the box-select zoom
-                            enabled: true, // Start with drag zoom disabled
+                        drag: { // Box-select zoom
+                            enabled: true,
                             borderColor: 'rgba(60, 60, 60, 0.5)',
                             borderWidth: 1,
                             backgroundColor: 'rgba(60, 60, 60, 0.2)',
                             modifierKey: null,
                         },
-                        mode: 'xy', // Zoom only on the X (time) axis
+                        mode: 'xy',
                     },
                     pan: {
-                        enabled: true, // Start with pan disabled
-                        mode: 'xy',      // Pan only on the X (time) axis
+                        enabled: true,
+                        mode: 'xy', 
                         modifierKey: null,
                     }
                 },
