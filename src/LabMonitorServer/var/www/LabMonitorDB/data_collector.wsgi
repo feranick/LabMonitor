@@ -23,6 +23,10 @@ CONFIG_PATH = os.path.join(APP_DIR, 'config.cfg')
 MONGO_AUTH_STRING = None
 SERVER_SECRET_KEY = None
 client = None # MongoDB client instance
+db = None
+collection = None
+DATABASE_NAME = None
+COLLECTION_NAME = None
 
 try:
     # Read credentials from config.cfg
@@ -32,7 +36,7 @@ try:
     
     MONGO_AUTH_STRING = config['DEFAULT'].get('MONGO_AUTH_STRING')
     SERVER_SECRET_KEY = config['DEFAULT'].get('SERVER_SECRET_KEY')
-    DATABASE_NAME =  config['DEFAULT'].get('DATABASE_NAME')
+    DATABASE_NAME = config['DEFAULT'].get('DATABASE_NAME')
     COLLECTION_NAME = config['DEFAULT'].get('COLLECTION_NAME')
     ORIGINS = config['DEFAULT'].get('ORIGINS')
     
@@ -48,8 +52,12 @@ try:
     
 except (ConnectionFailure, OperationFailure) as e:
     print(f"[CRITICAL ERROR] Could not connect or authorize with MongoDB: {e}")
+    client = None # Ensure client is set to None on failure
+    collection = None
 except Exception as e:
     print(f"[CRITICAL ERROR] General error during configuration or MongoDB setup: {e}")
+    client = None
+    collection = None
 
 
 # ----------------------------------------------------
@@ -57,15 +65,11 @@ except Exception as e:
 # ----------------------------------------------------
 app = Flask(__name__)
 
-# Configure CORS for the specific origins - only POST
-#CORS(app, resources={
-#   r"/submit-sensor-data": {"origins": ORIGINS}
-#})
-
-# Configure CORS for the specific origins - POST/GET
+# Configure CORS for all relevant endpoints: POST, GET Data, and GET Distinct Devices
 CORS(app, resources={
-   r"/submit-sensor-data": {"origins": ORIGINS},
-   r"/get-data": {"origins": "*"}
+    r"/submit-sensor-data": {"origins": ORIGINS},
+    r"/get-data": {"origins": "*"},
+    r"/distinct-devices": {"origins": "*"}
 })
 
 # ----------------------------------------------------
@@ -74,11 +78,12 @@ CORS(app, resources={
 
 @app.route('/submit-sensor-data', methods=['POST'])
 def submit_sensor_data():
+    """Handles incoming JSON data from the client and inserts it into MongoDB."""
     
     # 1. Ensure DB is available
-    if client is None:
+    if collection is None:
         return jsonify({"message": "Database service unavailable."}), 503
-        
+            
     # 2. Key Validation and Data Acquisition
     try:
         if not request.is_json:
@@ -87,6 +92,7 @@ def submit_sensor_data():
         data = request.get_json()
         submitted_key = data.get('mongoSecretKey')
         
+        # NOTE: Authentication logic assumes SERVER_SECRET_KEY is loaded successfully
         if not submitted_key or submitted_key != SERVER_SECRET_KEY:
             print(f"[ERROR] Unauthorized access attempt.")
             return jsonify({"message": "Unauthorized access or missing key."}), 403
@@ -95,15 +101,13 @@ def submit_sensor_data():
         print(f"[CRITICAL ERROR] Failed to parse request: {str(e)}")
         return jsonify({"message": f"Invalid request payload: {str(e)}"}), 400
 
-    # 3. Data Transformation (UTC to datetime conversion from server_app.py)
-    # FIX: Using datetime.datetime.utcnow() to properly access the class within the module.
+    # 3. Data Transformation (UTC to datetime conversion)
     data['server_submission_time'] = datetime.datetime.utcnow().isoformat()
     
     if 'UTC' in data and isinstance(data['UTC'], int):
         try:
             # Convert nanoseconds to seconds (divide by 1 billion)
             timestamp_seconds = data['UTC'] / 1_000_000_000
-            # FIX: Using datetime.datetime.fromtimestamp()
             data['datetime_utc_pico'] = datetime.datetime.fromtimestamp(timestamp_seconds)
         except Exception:
             pass 
@@ -111,14 +115,12 @@ def submit_sensor_data():
     if 'client_submission_time' in data and isinstance(data['client_submission_time'], int):
         try:
             # Convert milliseconds to seconds
-            # FIX: Using datetime.datetime.fromtimestamp()
             data['datetime_utc_client'] = datetime.datetime.fromtimestamp(data['client_submission_time'] / 1000)
         except Exception:
             pass
             
     # 4. Insert into MongoDB
     try:
-        # 'collection' is globally set during startup
         result = collection.insert_one(data)
         print(f"[INFO] Inserted document ID: {result.inserted_id}")
         
@@ -135,17 +137,18 @@ def submit_sensor_data():
         return jsonify({"message": f"Internal server error during database insertion: {e}"}), 500
 
 # ----------------------------------------------------
-# 5. NEW DATA VIEWER ROUTE
+# 5. DATA QUERY ROUTES
 # ----------------------------------------------------
+
 @app.route('/get-data', methods=['GET'])
 def get_data():
+    """Retrieves sensor data within a specified time range."""
     
     # 1. Ensure DB is available
-    if client is None:
+    if collection is None:
         return jsonify({"message": "Database service unavailable."}), 503
 
     # 2. Get start and end dates from URL query parameters
-    # We expect ?start=YYYY-MM-DDTHH:MM&end=YYYY-MM-DDTHH:MM
     try:
         start_str = request.args.get('start')
         end_str = request.args.get('end')
@@ -154,7 +157,6 @@ def get_data():
             return jsonify({"message": "Missing 'start' or 'end' query parameters."}), 400
 
         # Convert ISO strings to BSON datetime objects for MongoDB
-        # Note: We added the 'Z' to ensure UTC, but fromtimestamp is better
         start_date = datetime.datetime.fromisoformat(start_str)
         end_date = datetime.datetime.fromisoformat(end_str)
 
@@ -164,8 +166,6 @@ def get_data():
 
     # 3. Query MongoDB
     try:
-        # Build the query. We are searching on the BSON date we created
-        # during submission ('datetime_utc_pico')
         query = {
             "datetime_utc_pico": {
                 "$gte": start_date,
@@ -177,10 +177,9 @@ def get_data():
         cursor = collection.find(query).sort("datetime_utc_pico", 1)
 
         # 4. Serialize the results
-        # We must convert BSON _id and datetime objects to strings
         results = []
         for doc in cursor:
-            # We must manually build the response to make it JSON-serializable
+            # Manually build the response to make BSON objects JSON-serializable
             results.append({
                 "id": str(doc.get("_id")),
                 "datetime_utc_pico": doc.get("datetime_utc_pico").isoformat() + "Z",
@@ -195,7 +194,7 @@ def get_data():
                 "device_name": doc.get("device_name"),
                 "user_comment": doc.get("user_comment", "")
             })
-        
+            
         print(f"[INFO] Fetched {len(results)} documents for date range.")
         return jsonify(results), 200
 
@@ -204,6 +203,39 @@ def get_data():
         return jsonify({"message": f"Internal server error during data fetch: {e}"}), 500
 
 # ----------------------------------------------------
-# 5. WSGI Application Entry Point
+# 6. GET Route for Distinct Device Names
+# ----------------------------------------------------
+
+@app.route('/distinct-devices', methods=['GET'])
+def get_distinct_devices():
+    """
+    Retrieves all unique values for the 'deviceName' field across the collection
+    using the efficient PyMongo distinct() method.
+    
+    Returns: JSON array of strings (the unique device names).
+    """
+    
+    # 1. Check for database connection
+    if collection is None:
+        return jsonify({"message": "Database service unavailable or collection not initialized."}), 503
+
+    try:
+        # PyMongo's distinct() method is the optimal way to get unique field values.
+        distinct_names = collection.distinct("device_name")
+        
+        # 2. Return the resulting Python list, which Flask's jsonify converts to a JSON array.
+        return jsonify(distinct_names), 200
+
+    except OperationFailure as e:
+        # Handle authorization/permission issues on the database/collection
+        print(f"[ERROR] MongoDB Authorization Error during distinct query: {e}")
+        return jsonify({"message": "Authorization failed for database distinct query."}), 500
+    except Exception as e:
+        # Handle general errors (e.g., connection timed out)
+        print(f"[CRITICAL ERROR] Error executing distinct query: {e}")
+        return jsonify({"message": f"An unexpected error occurred during distinct query: {e}"}), 500
+
+# ----------------------------------------------------
+# 7. WSGI Application Entry Point
 # ----------------------------------------------------
 application = app

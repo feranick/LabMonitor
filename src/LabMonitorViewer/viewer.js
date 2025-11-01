@@ -176,6 +176,21 @@ async function fetchAndDisplayData() {
     }
 }
 
+// --- Get available devices that saved in database ---
+async function setDeviceNames() {
+    const DISTINCT_DEVICES_API_ENDPOINT = `/LabMonitorDB/api/distinct-devices`;
+    const response = await fetch(DISTINCT_DEVICES_API_ENDPOINT);
+    
+    if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.message || `Server responded with ${response.status}`);
+    }
+    
+    // dataArray will now contain the list of unique device names
+    const distinctDeviceNames = await response.json();
+    console.log(distinctDeviceNames);
+}
+
 // --- Update Visible DataSets ---
 function updateVisibleDatasets() {
     const checkboxes = document.querySelectorAll('.data-checkbox');
@@ -330,7 +345,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const checkboxes = document.querySelectorAll('.data-checkbox');
     
     const canvas = document.getElementById('sensorChart');
-
+    
+    setDeviceNames();
+    
     // --- Initialize the Chart ---
     initChart();
     updateVisibleDatasets(); 
