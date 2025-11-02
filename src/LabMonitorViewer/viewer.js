@@ -1,6 +1,7 @@
-let version = "2025.11.1.2";
+let version = "2025.11.2.1";
 let sensorChart;
 let hoveredDataIndex = -1;
+let nameSelIndex="LabMonitorViewer_device_dropdown";
 
 // This object will store ALL data points, just like before.
 const chartDataStore = {
@@ -196,22 +197,36 @@ async function setDeviceNames() {
     // dataArray will now contain the list of unique device names
     const distinctDeviceNames = await response.json();
     
-    const dropdown = document.getElementById('deviceDropdown');
+    const deviceDropdown = document.getElementById('deviceDropdown');
     
     const defaultOption = document.createElement('option');
     defaultOption.value = 'All';
     defaultOption.textContent = 'All devices';
     defaultOption.disabled = false;
     defaultOption.selected = true;
-    dropdown.appendChild(defaultOption);
+    deviceDropdown.appendChild(defaultOption);
 
     // Loop through the data and create an <option> for each item
     distinctDeviceNames.forEach(item => {
         const option = document.createElement('option');
         option.value = item;
         option.textContent = item;
-        dropdown.appendChild(option);
+        deviceDropdown.appendChild(option);
     });
+    
+    // Process cookie for device dropdown
+    selIndex = deviceDropdown.selectedIndex;
+
+    let indexToSet = 0; // Default to the first option
+    const cookieValue = getCookie(nameSelIndex);
+
+    if (cookieValue !== null) {
+        const parsedIndex = parseInt(cookieValue, 10);
+        if (!isNaN(parsedIndex) && parsedIndex >= 0 && parsedIndex < deviceDropdown.options.length) {
+            indexToSet = parsedIndex;
+            }
+    }
+    deviceDropdown.selectedIndex = indexToSet;
 }
 
 // --- Update Visible DataSets ---
@@ -366,10 +381,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const zoomBtn = document.getElementById('zoomButton');
     const resetZoomBtn = document.getElementById('resetZoomButton'); 
     const checkboxes = document.querySelectorAll('.data-checkbox');
+    const deviceDropdown = document.getElementById('deviceDropdown');
     
     const canvas = document.getElementById('sensorChart');
     
+    // --- Initialize device Dropdown ---
     setDeviceNames();
+    deviceDropdown.addEventListener('change', function() {
+        setCookie(nameSelIndex, this.selectedIndex ,1000);
+        console.log(nameSelIndex+"  "+ this.selectedIndex);
+    });
     
     // --- Initialize the Chart ---
     initChart();
@@ -377,6 +398,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Initialize the Zoom button text and state
     toggleZoomMode();
+
 
     // --- Add Event Listeners ---
     //fetchDataBtn.addEventListener('click', fetchAndDisplayData);
@@ -507,3 +529,15 @@ function getWebBulbTemp(temp, rh, type) {
         return "--";
     }
 }
+
+// Cookie Utilities
+function getCookie(name) {
+  return (name = (document.cookie + ';').match(new RegExp(name + '=.*;'))) && name[0].split(/=|;/)[1];
+}
+
+function setCookie(name, value, days) {
+  var e = new Date;
+  e.setDate(e.getDate() + (days || 365));
+  document.cookie = name + '=' + value + ';expires=' + e.toUTCString() + ';path=/;domain=.' + document.domain;
+}
+
