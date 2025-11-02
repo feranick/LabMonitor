@@ -152,6 +152,7 @@ def get_data():
     try:
         start_str = request.args.get('start')
         end_str = request.args.get('end')
+        device_name_str = request.args.get('device_name')
 
         if not start_str or not end_str:
             return jsonify({"message": "Missing 'start' or 'end' query parameters."}), 400
@@ -173,6 +174,12 @@ def get_data():
             }
         }
         
+        # Sort by time, oldest first
+        cursor = collection.find(query).sort("datetime_utc_pico", 1)
+        
+        if device_name_str:
+            query['device_name'] = device_name_str
+
         # Sort by time, oldest first
         cursor = collection.find(query).sort("datetime_utc_pico", 1)
 
