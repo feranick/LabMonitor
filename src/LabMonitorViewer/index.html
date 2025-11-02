@@ -40,6 +40,13 @@
         justify-content: center;
         align-items: center;
     }
+    #deviceDropdown {
+        padding: 5px;
+        font-size: 16px;
+        border-radius: 5px;
+        border: 1px solid #ccc;
+        margin-bottom: 10px;
+    }
     button, input[type="number"], input[type="text"] {
         font-size: 16px;
         padding: 8px 12px;
@@ -117,6 +124,9 @@
     <input type="datetime-local" id="startDate">
     <br><label for="endDate">End Time:</label>
     <input type="datetime-local" id="endDate">
+    <br><br><label for="deviceDropdown">Devices:</label>
+    <select id="deviceDropdown">
+        </select>
     </div>
     <div class="column">
     <button id="fetchDataButton" title="Normal click: set current time as end date Shift+click: uses listed end date">Fetch Data</button>

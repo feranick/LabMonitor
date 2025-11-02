@@ -1,4 +1,4 @@
-let version = "2025.11.1.1";
+let version = "2025.11.1.2";
 let sensorChart;
 let hoveredDataIndex = -1;
 
@@ -113,9 +113,16 @@ async function fetchAndDisplayData() {
     // Convert local datetime-local input to ISO strings
     const startDate = new Date(startInput + 'Z').toISOString();
     const endDate = new Date(endInput + 'Z').toISOString();
-
-    const API_ENDPOINT = `/LabMonitorDB/api/get-data?start=${startDate}&end=${endDate}`;
     
+    var API_ENDPOINT = `/LabMonitorDB/api/get-data?start=${startDate}&end=${endDate}`;
+    
+    const dropdown = document.getElementById('deviceDropdown');
+    const selectedValue = dropdown.value;
+        
+    if (selectedValue != "All") {
+        API_ENDPOINT += `&device_name=${selectedValue}`;
+        }
+            
     console.log(`Fetching data from: ${API_ENDPOINT}`);
     document.getElementById('fetchDataButton').textContent = "Loading...";
 
@@ -189,6 +196,23 @@ async function setDeviceNames() {
     // dataArray will now contain the list of unique device names
     const distinctDeviceNames = await response.json();
     console.log(distinctDeviceNames);
+    
+    const dropdown = document.getElementById('deviceDropdown');
+    
+    const defaultOption = document.createElement('option');
+    defaultOption.value = 'All';
+    defaultOption.textContent = 'All devices';
+    defaultOption.disabled = false;
+    defaultOption.selected = true;
+    dropdown.appendChild(defaultOption);
+
+    // Loop through the data and create an <option> for each item
+    distinctDeviceNames.forEach(item => {
+        const option = document.createElement('option');
+        option.value = item;
+        option.textContent = item;
+        dropdown.appendChild(option);
+    });
 }
 
 // --- Update Visible DataSets ---
