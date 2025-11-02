@@ -195,7 +195,6 @@ async function setDeviceNames() {
     
     // dataArray will now contain the list of unique device names
     const distinctDeviceNames = await response.json();
-    console.log(distinctDeviceNames);
     
     const dropdown = document.getElementById('deviceDropdown');
     
