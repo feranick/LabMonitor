@@ -406,10 +406,6 @@ document.addEventListener('DOMContentLoaded', () => {
     fetchDataBtn.addEventListener('click', (event) => {
         if (event.shiftKey || event.metaKey) {
             console.log('Use end date/times as displayed');
-            const endInput = document.getElementById('endDate').value;
-            // Optional: Prevent the default action (like opening a new tab on Ctrl+Click)
-            // event.preventDefault();
-            setCurrentEndDateTime();
         } else {
             console.log('Use the current date/time as endDate');
             setCurrentEndDateTime();
