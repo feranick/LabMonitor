@@ -139,9 +139,11 @@ function initChart() {
 //////////////////////////////////////////////
 // Get Data from Pico (Your function)
 //////////////////////////////////////////////
-async function fetchData() {
+async function fetchData(flag) {
     try {
-        const response = await fetch('/api/status');
+        url = '/api/status?submitMongo='+flag
+        console.log(`Requesting data with: `+ url);
+        const response = await fetch(url);
         const data = await response.json();
         return data;
     } catch (error) {
@@ -158,7 +160,11 @@ async function fetchData() {
 async function updatePlot(flag) {
     if (!isCollecting  && flag) return;
 
-    const data = await fetchData();
+    if (!document.getElementById('submitMongo-checkbox').checked ) {
+        flag = false;
+        }
+        
+    const data = await fetchData(flag);
     if (!data) return;
 
     const timestamp = new Date(Math.round(data.UTC / 1e6));
@@ -200,38 +206,37 @@ async function updatePlot(flag) {
         document.getElementById("sens2_Temp_current").style.color = "red";
         }
     
-    if (flag == true) {
-        // --- 3. Store data in our master history object ---
-        chartDataStore.labels.push(timestamp);
-        chartDataStore.isoLabels.push(timestamp.toISOString());
-        chartDataStore.sens1_Temp.push(s1_Temp);
-        chartDataStore.sens1_RH.push(s1_RH);
-        chartDataStore.sens1_WBT.push(s1_WBT);
-        chartDataStore.sens2_Temp.push(s2_Temp);
-        chartDataStore.sens2_RH.push(s2_RH);
-        chartDataStore.userComments.push(userComment);
+    // --- 3. Store data in our master history object ---
+    chartDataStore.labels.push(timestamp);
+    chartDataStore.isoLabels.push(timestamp.toISOString());
+    chartDataStore.sens1_Temp.push(s1_Temp);
+    chartDataStore.sens1_RH.push(s1_RH);
+    chartDataStore.sens1_WBT.push(s1_WBT);
+    chartDataStore.sens2_Temp.push(s2_Temp);
+    chartDataStore.sens2_RH.push(s2_RH);
+    chartDataStore.userComments.push(userComment);
 
-        // --- 4. Update the chart's shared X-axis ---
-        sensorChart.data.labels.push(timestamp);
+    // --- 4. Update the chart's shared X-axis ---
+    sensorChart.data.labels.push(timestamp);
+    // --- 5. Push new data ONLY to actve datasets ---
+    sensorChart.data.datasets.forEach(dataset => {
+        const key = dataset.label;
+        if (key === 'sens1_Temp') dataset.data.push(s1_Temp);
+        if (key === 'sens1_RH') dataset.data.push(s1_RH);
+        if (key === 'sens1_WBT') dataset.data.push(s1_WBT);
+        if (key === 'sens2_Temp') dataset.data.push(s2_Temp);
+        if (key === 'sens2_RH') dataset.data.push(s2_RH);
+    });
 
-        // --- 5. Push new data ONLY to active datasets ---
-        sensorChart.data.datasets.forEach(dataset => {
-            const key = dataset.label;
-            if (key === 'sens1_Temp') dataset.data.push(s1_Temp);
-            if (key === 'sens1_RH') dataset.data.push(s1_RH);
-            if (key === 'sens1_WBT') dataset.data.push(s1_WBT);
-            if (key === 'sens2_Temp') dataset.data.push(s2_Temp);
-            if (key === 'sens2_RH') dataset.data.push(s2_RH);
-        });
-
-        // --- 6. Redraw the chart ---
-        sensorChart.update('none');
+    // --- 6. Redraw the chart ---
+    sensorChart.update('none');
     
+    //if (flag == true) {
         // Clean data and submit to MongoDB
-        if (document.getElementById('submitMongo-checkbox').checked) {
-            submitData(data);
-            }
-        }
+        //if (document.getElementById('submitMongo-checkbox').checked && flag == true) {
+        //    submitData(data);
+        //    }
+        //}
 }
 
 //////////////////////////////////////////////
@@ -396,6 +401,10 @@ function resetZoom() {
     console.log("Zoom reset.");
 }
 
+/*
+//////////////////////////////////////////////
+// THIS FUNCTION IS NO LONGER USED AS SUBMISSION
+// IS DONE on the PICO
 //////////////////////////////////////////////
 // Clones the data and removes sensitive keys.
 // @param {object} data - The data object received from the Pico.
@@ -420,6 +429,9 @@ function cleanAndAugmentData(data) {
     return cleanData;
 }
 
+//////////////////////////////////////////////
+// THIS FUNCTION IS NO LONGER USED AS SUBMISSION
+// IS DONE on the PICO
 //////////////////////////////////////////////
 // Submits the CLEANED JSON data to the defined server endpoint using the Fetch API.
 // @param {object} data - The sensor data object to send.
@@ -472,6 +484,7 @@ async function submitData(data) {
         console.log(`Error: Failed to submit data after ${maxRetries} attempts. Check server endpoint and console for details.`);
     }
     }
+*/
 
 //////////////////////////////////////////////
 // Page Load Event

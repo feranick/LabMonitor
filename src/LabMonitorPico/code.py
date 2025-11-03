@@ -4,7 +4,7 @@
 # * By: Nicola Ferralis <feranick@hotmail.com>
 # **********************************************
 
-version = "2025.11.1.1"
+version = "2025.11.2.1-test"
 
 import wifi
 import time
@@ -98,10 +98,12 @@ class LabServer:
             self.mongoURL = os.getenv("mongoURL")
             self.mongoSecretKey = os.getenv("mongoSecretKey")
             self.deviceName = os.getenv("deviceName")
+            self.certPath = os.getenv("certPath")
         except:
             self.mongoURL = None
             self.mongoSecretKey = None
             self.deviceName = None
+            self.certPath = None
             
         try:
             self.connect_wifi()
@@ -153,7 +155,19 @@ class LabServer:
     def setup_server(self):
         pool = socketpool.SocketPool(wifi.radio)
         self.server = Server(pool, debug=True)
-        self.requests = adafruit_requests.Session(pool, ssl.create_default_context())
+        
+        ### Original setup - no local submission
+        #self.requests = adafruit_requests.Session(pool, ssl.create_default_context())
+        
+        ### Submission from Pico with certificate handling
+        ssl_context = ssl.create_default_context()
+        ROOT_CA_CERT = self.readCert(self.certPath)
+        try:
+            ssl_context.load_verify_locations(cadata=ROOT_CA_CERT)
+            print("Custom Root CA successfully loaded.")
+        except Exception as e:
+            print(f"Failed to load certificate: {e}")
+        self.requests = adafruit_requests.Session(pool, ssl_context)
 
         # --- Routes ---
 
@@ -174,14 +188,23 @@ class LabServer:
 
         @self.server.route("/api/status", methods=[GET])
         def api_status(request):
-            
-            json_content = self.assembleJson()
-            print(json_content)
+            data_dict = self.assembleJson()
+            print(data_dict)
+        
+            try:
+                submitMongo = request.query_params.get("submitMongo")
+            except AttributeError:
+                submitMongo = request.args.get("submitMongo")
+                
+            if submitMongo.lower() == 'true':
+                print("Submitting data to MongoDB")
+                url = self.mongoURL+"/LabMonitorDB/api/submit-sensor-data"
+                self.sendDataMongo(url, data_dict)
 
             headers = {"Content-Type": "application/json"}
 
             # Return the response using the compatible Response constructor
-            return Response(request, json_content, headers=headers)
+            return Response(request, json.dumps(data_dict), headers=headers)
 
         @self.server.route("/scripts.js")
         def icon_route(request):
@@ -256,6 +279,26 @@ class LabServer:
 
             time.sleep(0.01)
             
+    def readCert(self, file_path):
+        #file_path = "static/cert/cert.txt"
+        certificate_content = ""
+
+        try:
+            # Open the file in read mode ('r')
+            with open(file_path, 'r') as file:
+                # Read the entire content of the file into the variable
+                certificate_content = file.read()
+    
+            print("File read successfully.")
+            # Optional: Print the content to verify
+            # print(certiicate_content)
+            return certificate_content
+
+        except OSError as e:
+            # Handle the case where the file or directory doesn't exist
+            print(f"Error opening or reading file at {file_path}: {e}")
+            return None
+            
     def assembleJson(self):
         sensData1 = self.sensors.getData(self.sensors.envSensor1, self.sensors.envSensorName1, self.sensors.temp_offset1)
         sensData2 = self.sensors.getData(self.sensors.envSensor2, self.sensors.envSensorName2, self.sensors.temp_offset2)
@@ -278,7 +321,7 @@ class LabServer:
             "mongoSecretKey" : self.mongoSecretKey,
             "device_name" : self.deviceName,
             }
-        return json.dumps(data_dict)
+        return data_dict
             
     ############################
     # Set up time/date
@@ -304,7 +347,7 @@ class LabServer:
     # Submit to Mongo DB
     # Currently disabled as handled by JS on client side.
     #####################################################
-    '''
+    
     def sendDataMongo(self, url, data):
         print("-" * 40)
         print(f"Attempting to POST data to: {url}")
@@ -327,7 +370,7 @@ class LabServer:
             )
 
             # Check for success (HTTP 200 series status code)
-            if response.status_code == 200:
+            if response.status_code in [200, 201]:
                 print("Data successfully sent!")
                 print("Server Response:", response.text)
             else:
@@ -343,7 +386,7 @@ class LabServer:
 
         except Exception as e:
             print(f"An error occurred during the POST request: {e}")
-    '''
+    
 
 ############################
 # Control, Sensors
