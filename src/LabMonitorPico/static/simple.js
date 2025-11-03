@@ -1,5 +1,7 @@
 let coords = null;
 let intervalId;
+let isCollecting = false;
+let submitToMongo = true;
 
 ////////////////////////////////////
 // Get and format Date and Time
@@ -21,28 +23,31 @@ async function getFeed(url) {
 //////////////////////////////////////////////
 // Ger Local Data from Pico
 //////////////////////////////////////////////
-async function fetchData() {
+async function fetchData(flag) {
     try {
-        const response = await fetch('/api/status');
+        url = '/api/status?submitMongo='+flag
+        console.log(`Requesting data with: `+ url);
+        const response = await fetch(url);
         const data = await response.json();
         return data;
-        
     } catch (error) {
         console.error('Error fetching status:', error);
-        document.getElementById("warnLabel").textContent = "Error: Check connection.";
-        // Re-enable buttons even on error, so user can try again
-        document.getElementById("Status").disabled = false;
+        stopInterval();
+        document.getElementById("toggleButton").textContent = "Start (Error)";
+        document.getElementById("toggleButton").classList.add("stopped");
     }
 }
+
 //////////////////////////////////////////////
 // Logic when pushing Update Status button
 //////////////////////////////////////////////
-async function updateStatus() {
+async function updateStatus(flag) {
     document.getElementById("Status").disabled = true;
     document.getElementById("Status").value = "Loading...";
     //document.getElementById("warnLabel").textContent = "Testing";
     
-    data = await fetchData();
+    const data = await fetchData(flag);
+    if (!data) return;
     console.log(data);
     
     datetime = getCurrentDateTimeUTC(data.UTC);
@@ -73,11 +78,13 @@ async function updateStatus() {
     document.getElementById("Status").disabled = false;
 }
 
-document.addEventListener('DOMContentLoaded', updateStatus);
+//document.addEventListener('DOMContentLoaded', updateStatus, "false");
 document.addEventListener('DOMContentLoaded', function() {
 
     const refreshRateInput = document.getElementById("refreshRate");
     const pUIBtn = document.getElementById('plotterUIBtn');
+    
+    updateStatus(false);
     
     const startOrRestartInterval = () => {
         if (intervalId) {
@@ -86,7 +93,8 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         const rawValue = parseInt(refreshRateInput.value, 10) || 10;
         const refreshRate = rawValue * 1000;
-        intervalId = setInterval(updateStatus, refreshRate, "False");
+        intervalId = setInterval(() => updateStatus("false"), 1000);
+        //intervalId = setInterval(updateStatus, refreshRate, "False");
         console.log(`Set new refresh rate to: ${refreshRate / 1000} seconds`);
     };
     

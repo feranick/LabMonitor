@@ -197,7 +197,7 @@ class LabServer:
                 submitMongo = request.query_params.get("submitMongo")
             except AttributeError:
                 submitMongo = request.args.get("submitMongo")
-                
+                                
             if submitMongo.lower() == 'true' and self.isPicoSubmitMongo.lower() == 'true':
                 print("Submitting data to MongoDB")
                 url = self.mongoURL+"/LabMonitorDB/api/submit-sensor-data"
