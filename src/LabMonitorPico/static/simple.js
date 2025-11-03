@@ -93,7 +93,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         const rawValue = parseInt(refreshRateInput.value, 10) || 10;
         const refreshRate = rawValue * 1000;
-        intervalId = setInterval(() => updateStatus("false"), 1000);
+        intervalId = setInterval(() => updateStatus("false"), refreshRate);
         //intervalId = setInterval(updateStatus, refreshRate, "False");
         console.log(`Set new refresh rate to: ${refreshRate / 1000} seconds`);
     };
