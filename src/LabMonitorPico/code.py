@@ -1,10 +1,10 @@
 # **********************************************
 # * LabMonitor - Rasperry Pico W
-# * v2025.11.1.1
+# * v2025.11.2.2
 # * By: Nicola Ferralis <feranick@hotmail.com>
 # **********************************************
 
-version = "2025.11.2.1-test"
+version = "2025.11.2.2"
 
 import wifi
 import time
@@ -99,11 +99,13 @@ class LabServer:
             self.mongoSecretKey = os.getenv("mongoSecretKey")
             self.deviceName = os.getenv("deviceName")
             self.certPath = os.getenv("certPath")
+            self.isPicoSubmitMongo = os.getenv("isPicoSubmitMongo")
         except:
             self.mongoURL = None
             self.mongoSecretKey = None
             self.deviceName = None
             self.certPath = None
+            self.isPicoSubmitMongo = "False"
             
         try:
             self.connect_wifi()
@@ -196,7 +198,7 @@ class LabServer:
             except AttributeError:
                 submitMongo = request.args.get("submitMongo")
                 
-            if submitMongo.lower() == 'true':
+            if submitMongo.lower() == 'true' and self.isPicoSubmitMongo.lower() == 'true':
                 print("Submitting data to MongoDB")
                 url = self.mongoURL+"/LabMonitorDB/api/submit-sensor-data"
                 self.sendDataMongo(url, data_dict)
@@ -320,6 +322,7 @@ class LabServer:
             "mongoURL": self.mongoURL,
             "mongoSecretKey" : self.mongoSecretKey,
             "device_name" : self.deviceName,
+            "isPicoSubmitMongo" : self.isPicoSubmitMongo,
             }
         return data_dict
             

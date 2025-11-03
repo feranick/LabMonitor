@@ -230,13 +230,13 @@ async function updatePlot(flag) {
 
     // --- 6. Redraw the chart ---
     sensorChart.update('none');
-    
-    //if (flag == true) {
+        
+    if (flag == true && data.isPicoSubmitMongo == "False") {
         // Clean data and submit to MongoDB
-        //if (document.getElementById('submitMongo-checkbox').checked && flag == true) {
-        //    submitData(data);
-        //    }
-        //}
+        if (document.getElementById('submitMongo-checkbox').checked) {
+            submitData(data);
+            }
+        }
 }
 
 //////////////////////////////////////////////
@@ -401,10 +401,7 @@ function resetZoom() {
     console.log("Zoom reset.");
 }
 
-/*
-//////////////////////////////////////////////
-// THIS FUNCTION IS NO LONGER USED AS SUBMISSION
-// IS DONE on the PICO
+
 //////////////////////////////////////////////
 // Clones the data and removes sensitive keys.
 // @param {object} data - The data object received from the Pico.
@@ -429,9 +426,6 @@ function cleanAndAugmentData(data) {
     return cleanData;
 }
 
-//////////////////////////////////////////////
-// THIS FUNCTION IS NO LONGER USED AS SUBMISSION
-// IS DONE on the PICO
 //////////////////////////////////////////////
 // Submits the CLEANED JSON data to the defined server endpoint using the Fetch API.
 // @param {object} data - The sensor data object to send.
@@ -484,7 +478,7 @@ async function submitData(data) {
         console.log(`Error: Failed to submit data after ${maxRetries} attempts. Check server endpoint and console for details.`);
     }
     }
-*/
+
 
 //////////////////////////////////////////////
 // Page Load Event
