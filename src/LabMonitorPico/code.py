@@ -1,10 +1,10 @@
 # **********************************************
 # * LabMonitor - Rasperry Pico W
-# * v2025.11.2.2
+# * v2025.11.3.1
 # * By: Nicola Ferralis <feranick@hotmail.com>
 # **********************************************
 
-version = "2025.11.2.2-test"
+version = "2025.11.3.1"
 
 import wifi
 import time
