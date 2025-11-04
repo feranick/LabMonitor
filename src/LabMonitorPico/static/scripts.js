@@ -1,3 +1,6 @@
+//////////////////////////////////////////////
+// Global definitions
+//////////////////////////////////////////////
 let sensorChart;
 let intervalId;
 let isCollecting = false;
@@ -5,7 +8,9 @@ let submitToMongo = true;
 let isPicoRunning = false;
 let hoveredDataIndex = -1;
 
+//////////////////////////////////////////////
 // This object will store ALL data points, even for hidden datasets.
+//////////////////////////////////////////////
 const chartDataStore = {
     labels: [],       // Array of Date objects (for the chart)
     isoLabels: [],    // Array of ISO strings (for CSV)
@@ -138,27 +143,7 @@ function initChart() {
 }
 
 //////////////////////////////////////////////
-// Get Data from Pico (Your function)
-//////////////////////////////////////////////
-/*async function fetchData(flag) {
-    try {
-        const url = '/api/status?submitMongo='+flag
-        console.log(`Requesting data with: `+ url);
-        const response = await fetch(url);
-        const data = await response.json();
-        return data;
-    } catch (error) {
-        console.error('Error fetching status:', error);
-        stopInterval();
-        document.getElementById("toggleButton").textContent = "Start (Error)";
-        document.getElementById("toggleButton").classList.add("stopped");
-    }
-}
-*/
-
-//////////////////////////////////////////////
-// Get Data from Pico (Your function)
-// Renamed from fetchData to fetchPicoStatus
+// Get Data from Pico
 //////////////////////////////////////////////
 async function fetchPicoStatus(flag) {
     try {
@@ -175,9 +160,6 @@ async function fetchPicoStatus(flag) {
         return data;
     } catch (error) {
         console.error('Error fetching status:', error);
-        // Do not stop the interval here. We want to keep trying to reconnect.
-        // stopInterval(); 
-        // We will update the button based on the Pico's actual status later.
         // document.getElementById("toggleButton").textContent = "Start (Error)";
         // document.getElementById("toggleButton").classList.add("stopped");
     }
@@ -229,9 +211,6 @@ async function sendControlCommand(command, interval = 30) {
 // This runs on a JS timer and handles charting/client-side submission
 //////////////////////////////////////////////
 async function updatePlot() {
-    // isCollecting flag only matters if we are submitting data from the client side.
-    // If the data is being submitted from the Pico, we just need the latest reading.
-    
     // We check if the Pico is configured to submit data, and if the client-side checkbox is checked.
     const clientfFlagSubmits = document.getElementById('submitMongo-checkbox').checked;
         
@@ -239,18 +218,11 @@ async function updatePlot() {
     if (!data) return;
     
     // --- Determine if we are logging locally and submitting from the client ---
-    // If the acquisition is running on the Pico (isPicoRunning) OR 
-    // if the Pico is NOT configured to submit data, and the client is running, we proceed.
     const isPicoSubmitting = data.isPicoSubmitMongo === "True";
-    
-    // If the Pico handles submission (isPicoSubmitting), the client only needs to display data.
-    // If the Pico does NOT handle submission, the client must submit if the checkbox is checked.
     
     const timestamp = new Date(Math.round(data.UTC / 1e6));
 
     // --- 1. Calculate all values ---
-    // ... (rest of step 1 remains the same) ...
-
     const datetime = getCurrentDateTimeUTC(data.UTC);
     const s1_Temp = parseFloat(data.sens1_Temp) || null;
     const s1_RH = parseFloat(data.sens1_RH) || null;
@@ -270,7 +242,6 @@ async function updatePlot() {
     }
             
     // --- 2. UPDATE CURRENT MEASUREMENTS ---
-    // ... (This section remains the same, updating current readings on the page) ...
     document.getElementById("datetime_current").textContent = datetime;
     document.getElementById("sens1_Temp_current").textContent = data.sens1_Temp + " \u00B0C";
     document.getElementById("sens1_Temp_current").style.color = "#00008B";
@@ -278,8 +249,6 @@ async function updatePlot() {
     document.getElementById("sens1_WBT_current").textContent = s1_WBT_string + " \u00B0C"; 
     document.getElementById("sens2_Temp_current").textContent = data.sens2_Temp + " \u00B0C";
     document.getElementById("sens2_Temp_current").style.color = "#00008B";
-    // document.getElementById("ip_address").textContent = data.ip; // Moved to fetchPicoStatus
-    // document.getElementById("version").textContent = data.version; // Moved to fetchPicoStatus
     if (data.sens1_type != "sensor") {
         document.getElementById("sens1_Temp_current").style.color = "red";
     }
@@ -289,9 +258,6 @@ async function updatePlot() {
     }
 
     // --- 3. Store data in our master history object (LOGGING) ---
-    // We only log if the Pico is actively running the acquisition timer.
-    // This assumes the Pico only updates sensor data once every 30s.
-    // If Pico runs the acquisition, we log it. If Pico is stopped, we only display the last status.
     if (isPicoRunning) { 
         chartDataStore.labels.push(timestamp);
         chartDataStore.isoLabels.push(timestamp.toISOString());
@@ -452,7 +418,9 @@ function exportToCsv() {
     document.body.removeChild(link);
 }
 
+//////////////////////////////////////////////
 // Function to toggle between Pan and Box Zoom modes
+//////////////////////////////////////////////
 function toggleZoomMode() {
     const isPanEnabled = sensorChart.options.plugins.zoom.pan.enabled;
     
@@ -484,8 +452,9 @@ function toggleZoomMode() {
     sensorChart.update('none'); 
 }
 
-
+//////////////////////////////////////////////
 // Synchronizes the JS button and isPicoRunning flag with the Pico's actual status.
+//////////////////////////////////////////////
 async function syncPicoStatus() {
     try {
         const response = await fetch('/api/acquisition_status');
@@ -568,22 +537,11 @@ async function refreshRateLogic() {
         console.log(`Polling interval started with rate: ${intervalInput.value}s`);
         console.log(isPicoRunning);
     }
-    /*
-    if (newStatus) {
-        // Update local state and button based on the Pico's reported new status
-        isPicoRunning = (newStatus === "running");
-        syncPicoStatus();
-        
-        // If acquisition started, manually trigger an immediate plot update
-        if (isPicoRunning) {
-            updatePlot();
-        }
-    }
-    */
 }
 
-
+//////////////////////////////////////////////
 // Function to reset the zoom
+//////////////////////////////////////////////
 function resetZoom() {
     sensorChart.resetZoom();
     console.log("Zoom reset.");
@@ -592,8 +550,6 @@ function resetZoom() {
 
 //////////////////////////////////////////////
 // Clones the data and removes sensitive keys.
-// @param {object} data - The data object received from the Pico.
-// @returns {object} The cleaned data object ready for submission.
 //////////////////////////////////////////////
 function cleanAndAugmentData(data) {
     const cleanData = { ...data };
@@ -616,7 +572,6 @@ function cleanAndAugmentData(data) {
 
 //////////////////////////////////////////////
 // Submits the CLEANED JSON data to the defined server endpoint using the Fetch API.
-// @param {object} data - The sensor data object to send.
 //////////////////////////////////////////////
 async function submitData(data) {
     const cleanData = cleanAndAugmentData(data);
@@ -701,7 +656,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // --- Add Event Listeners ---
     // Start/Stop Button
-    // Start/Stop Button
     toggleBtn.addEventListener('click', toggleAcquisition);
 
     // Clear Button
@@ -712,13 +666,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     resetZoomBtn.addEventListener('click', resetZoom);
     
     refreshInput.addEventListener('change', refreshRateLogic);
-
-    // Refresh Rate Input
-    //refreshInput.addEventListener('change', () => {
-    //    if (isCollecting) {
-    //        startInterval();
-    //    }
-    //});
     
     // Checkboxes
     checkboxes.forEach(cb => {
@@ -735,6 +682,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     
 });
 
+//////////////////////////////////////////////
+// Logic for adding the custom tooltips.
+//////////////////////////////////////////////
 const FixedInfoPlugin = {
     id: 'fixedInfoDisplay',
     afterDraw(chart, args, options) {

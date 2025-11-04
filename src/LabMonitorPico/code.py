@@ -1,10 +1,10 @@
 # **********************************************
 # * LabMonitor - Rasperry Pico W
-# * v2025.11.3.1
+# * v2025.11.4.1
 # * By: Nicola Ferralis <feranick@hotmail.com>
 # **********************************************
 
-version = "2025.11.3.1"
+version = "2025.11.4.1"
 
 import wifi
 import time
@@ -231,11 +231,7 @@ class LabServer:
         def api_acquisition_status(request):
             status_data = {"status": self.get_acquisition_status(), "interval": ACQUISITION_INTERVAL}
             print(f"status: {status_data['status']}")
-            #return Response(request, self.get_acquisition_status())
             return JSONResponse(request, status_data)
-            #return JSONResponse(status_data, status=200)
-            #print(f"status: {self.get_acquisition_status()}")
-            #return JSONResponse(request, {"status": self.get_acquisition_status()}, status=200)
 
         @self.server.route("/api/status", methods=[GET])
         def api_status(request):
