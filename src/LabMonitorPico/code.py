@@ -183,10 +183,10 @@ class LabServer:
             return self._serve_static_file(request, 'static/simple.html')
 
         # Status Check Route (Placeholder)
-        @self.server.route("/status", methods=[GET])
-        def update_status(request):
-            # Use simplified Response for 200 OK
-            return Response(request, "OK")
+        #@self.server.route("/status", methods=[GET])
+        #def update_status(request):
+        #    # Use simplified Response for 200 OK
+        #    return Response(request, "OK")
 
         @self.server.route("/api/status", methods=[GET])
         def api_status(request):
