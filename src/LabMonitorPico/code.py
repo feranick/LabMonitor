@@ -4,7 +4,7 @@
 # * By: Nicola Ferralis <feranick@hotmail.com>
 # **********************************************
 
-version = "2025.11.2.2"
+version = "2025.11.2.2-test"
 
 import wifi
 import time
@@ -22,6 +22,10 @@ import adafruit_requests
 from adafruit_httpserver import Server, MIMETypes, Response, GET, POST, JSONResponse
 
 import adafruit_ntp
+
+is_acquisition_running = False
+last_acquisition_time = 0.0
+ACQUISITION_INTERVAL = 30.0 # Your desired interval in seconds
 
 # MCP9808 ONLY
 import adafruit_mcp9808
@@ -93,6 +97,10 @@ class LabServer:
         self.ntp = None
         self.server = None
         self.ip = "0.0.0.0"
+        
+        # Initialize timing for the data loop
+        global last_acquisition_time
+        last_acquisition_time = time.monotonic()
         
         try:
             self.mongoURL = os.getenv("mongoURL")
@@ -182,11 +190,52 @@ class LabServer:
         def base_route(request):
             return self._serve_static_file(request, 'static/simple.html')
 
-        # Status Check Route (Placeholder)
-        #@self.server.route("/status", methods=[GET])
-        #def update_status(request):
-        #    # Use simplified Response for 200 OK
-        #    return Response(request, "OK")
+        # --- Acquisition Control Route ---
+        @self.server.route("/api/control", methods=[POST])
+        def api_control(request):
+            global is_acquisition_running, last_acquisition_time, ACQUISITION_INTERVAL
+            
+            try:
+                data = request.json()
+                command = data.get("command", "").lower()
+                new_interval = data.get("interval")
+                
+                # --- Update Interval if provided and valid ---
+                if new_interval is not None and isinstance(new_interval, (int, float)) and new_interval >= 1:
+                    ACQUISITION_INTERVAL = float(new_interval)
+                    print(f"Acquisition interval updated to: {ACQUISITION_INTERVAL}s")
+
+                if command == "start":
+                    if not is_acquisition_running:
+                        is_acquisition_running = True
+                        last_acquisition_time = time.monotonic() # Reset timer on start
+                        print("Acquisition: STARTED")
+                    message = "Acquisition is now running."
+                    
+                elif command == "stop":
+                    is_acquisition_running = False
+                    print("Acquisition: STOPPED")
+                    message = "Acquisition is now stopped."
+                    
+                else:
+                    return JSONResponse(request, {"success": False, "message": "Invalid command. Use 'start' or 'stop'."}, status=400)
+                    
+                return JSONResponse(request, {"success": True, "status": self.get_acquisition_status(), "interval": ACQUISITION_INTERVAL})
+
+            except Exception as e:
+                print(f"Error in /api/control: {e}")
+                return JSONResponse(request, {"success": False, "message": f"Server error: {e}"}, status=500)
+
+        # --- Acquisition Status Route (for UI sync) ---
+        @self.server.route("/api/acquisition_status", methods=[GET])
+        def api_acquisition_status(request):
+            status_data = {"status": self.get_acquisition_status(), "interval": ACQUISITION_INTERVAL}
+            print(f"status: {status_data['status']}")
+            #return Response(request, self.get_acquisition_status())
+            return JSONResponse(request, status_data)
+            #return JSONResponse(status_data, status=200)
+            #print(f"status: {self.get_acquisition_status()}")
+            #return JSONResponse(request, {"status": self.get_acquisition_status()}, status=200)
 
         @self.server.route("/api/status", methods=[GET])
         def api_status(request):
@@ -264,13 +313,16 @@ class LabServer:
                 return Response(request, "File Not Found. Check console.")
 
     def serve_forever(self):
+        global is_acquisition_running, last_acquisition_time
+        
         while True:
+            # 1. Check/Handle WiFi
             if not wifi.radio.connected:
                 print("WiFi connection lost. Rebooting...")
                 self.reboot()
 
             try:
-                self.server.poll()
+                self.server.poll() 
             except (BrokenPipeError, OSError) as e:
                 if isinstance(e, OSError) and e.args[0] not in (32, 104):
                     print(f"Unexpected OSError in server poll: {e}")
@@ -279,7 +331,31 @@ class LabServer:
             except Exception as e:
                 print(f"Unexpected critical error in server poll: {e}")
 
+            # 3. Check Acquisition Timer (NON-BLOCKING)
+            if is_acquisition_running:
+                current_time = time.monotonic()
+                if (current_time - last_acquisition_time) >= ACQUISITION_INTERVAL:
+                    print("-" * 20)
+                    print(f"Scheduled acquisition triggered at {current_time:.2f}")
+                    
+                    # Your existing logic from /api/status, but without the HTTP wrapper
+                    data_dict = self.assembleJson()
+                    print(data_dict)
+                    
+                    # Log to MongoDB if configured for Pico submission
+                    if self.isPicoSubmitMongo.lower() == 'true':
+                        print("Submitting scheduled data to MongoDB")
+                        url = self.mongoURL + "/LabMonitorDB/api/submit-sensor-data"
+                        self.sendDataMongo(url, data_dict)
+                    
+                    last_acquisition_time = current_time # Reset the timer
+
             time.sleep(0.01)
+            
+    # --- Helper method to get current status ---
+    def get_acquisition_status(self):
+        global is_acquisition_running
+        return "running" if is_acquisition_running else "stopped"
             
     def readCert(self, file_path):
         #file_path = "static/cert/cert.txt"

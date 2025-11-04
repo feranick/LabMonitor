@@ -2,6 +2,7 @@ let sensorChart;
 let intervalId;
 let isCollecting = false;
 let submitToMongo = true;
+let isPicoRunning = false;
 let hoveredDataIndex = -1;
 
 // This object will store ALL data points, even for hidden datasets.
@@ -139,9 +140,9 @@ function initChart() {
 //////////////////////////////////////////////
 // Get Data from Pico (Your function)
 //////////////////////////////////////////////
-async function fetchData(flag) {
+/*async function fetchData(flag) {
     try {
-        url = '/api/status?submitMongo='+flag
+        const url = '/api/status?submitMongo='+flag
         console.log(`Requesting data with: `+ url);
         const response = await fetch(url);
         const data = await response.json();
@@ -153,23 +154,103 @@ async function fetchData(flag) {
         document.getElementById("toggleButton").classList.add("stopped");
     }
 }
+*/
+
+//////////////////////////////////////////////
+// Get Data from Pico (Your function)
+// Renamed from fetchData to fetchPicoStatus
+//////////////////////////////////////////////
+async function fetchPicoStatus(flag) {
+    try {
+        const url = '/api/status?submitMongo='+flag;
+        console.log(`Requesting status from: ` + url);
+        const response = await fetch(url);
+        const data = await response.json();
+        
+        // This is a synchronous check to ensure connectivity
+        if (data.ip) { 
+            document.getElementById("ip_address").textContent = data.ip;
+            document.getElementById("version").textContent = data.version;
+        }
+        return data;
+    } catch (error) {
+        console.error('Error fetching status:', error);
+        // Do not stop the interval here. We want to keep trying to reconnect.
+        // stopInterval(); 
+        // We will update the button based on the Pico's actual status later.
+        // document.getElementById("toggleButton").textContent = "Start (Error)";
+        // document.getElementById("toggleButton").classList.add("stopped");
+    }
+}
+
+
+//////////////////////////////////////////////
+// Sends a command to the Pico to start or stop the scheduled acquisition.
+//////////////////////////////////////////////
+async function sendControlCommand(command, interval = 30) {
+    try {
+        // Fetch current data to get necessary URL keys (like mongoURL)
+        const currentData = await fetchPicoStatus(false);
+        if (!currentData || !currentData.ip) {
+             console.error('Could not get Pico IP/URL for control command.');
+             return;
+        }
+
+        const url = `/api/control`;
+        console.log(`Sending command '${command}' to ${url}`);
+
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                command: command, 
+                interval: interval
+            })
+        });
+
+        const result = await response.json();
+        
+        if (response.ok && result.success) {
+            console.log(`Pico control successful. New status: ${result.status}`);
+            return result.status;
+        } else {
+            console.error(`Pico command failed: ${result.message}`);
+            return null;
+        }
+
+    } catch (error) {
+        console.error(`Error sending control command '${command}' to Pico:`, error);
+        return null;
+    }
+}
 
 //////////////////////////////////////////////
 // Main Plot Update Logic
+// This runs on a JS timer and handles charting/client-side submission
 //////////////////////////////////////////////
-async function updatePlot(flag) {
-    if (!isCollecting  && flag) return;
-
-    if (!document.getElementById('submitMongo-checkbox').checked ) {
-        flag = false;
-        }
+async function updatePlot() {
+    // isCollecting flag only matters if we are submitting data from the client side.
+    // If the data is being submitted from the Pico, we just need the latest reading.
+    
+    // We check if the Pico is configured to submit data, and if the client-side checkbox is checked.
+    const clientfFlagSubmits = document.getElementById('submitMongo-checkbox').checked;
         
-    const data = await fetchData(flag);
+    const data = await fetchPicoStatus(false);
     if (!data) return;
-
+    
+    // --- Determine if we are logging locally and submitting from the client ---
+    // If the acquisition is running on the Pico (isPicoRunning) OR 
+    // if the Pico is NOT configured to submit data, and the client is running, we proceed.
+    const isPicoSubmitting = data.isPicoSubmitMongo === "True";
+    
+    // If the Pico handles submission (isPicoSubmitting), the client only needs to display data.
+    // If the Pico does NOT handle submission, the client must submit if the checkbox is checked.
+    
     const timestamp = new Date(Math.round(data.UTC / 1e6));
 
     // --- 1. Calculate all values ---
+    // ... (rest of step 1 remains the same) ...
+
     const datetime = getCurrentDateTimeUTC(data.UTC);
     const s1_Temp = parseFloat(data.sens1_Temp) || null;
     const s1_RH = parseFloat(data.sens1_RH) || null;
@@ -179,7 +260,7 @@ async function updatePlot(flag) {
     const s1_WBT = parseFloat(s1_WBT_string) || null;
     
     const commentElement = document.getElementById('userComment');
-    let userComment = "No comment"; // Default value
+    let userComment = "No comment"; 
 
     if (commentElement && commentElement.value) {
         userComment = commentElement.value.trim();
@@ -187,8 +268,9 @@ async function updatePlot(flag) {
             userComment = "No comment";
         }
     }
-        
+            
     // --- 2. UPDATE CURRENT MEASUREMENTS ---
+    // ... (This section remains the same, updating current readings on the page) ...
     document.getElementById("datetime_current").textContent = datetime;
     document.getElementById("sens1_Temp_current").textContent = data.sens1_Temp + " \u00B0C";
     document.getElementById("sens1_Temp_current").style.color = "#00008B";
@@ -196,47 +278,51 @@ async function updatePlot(flag) {
     document.getElementById("sens1_WBT_current").textContent = s1_WBT_string + " \u00B0C"; 
     document.getElementById("sens2_Temp_current").textContent = data.sens2_Temp + " \u00B0C";
     document.getElementById("sens2_Temp_current").style.color = "#00008B";
-    document.getElementById("ip_address").textContent = data.ip;
-    document.getElementById("version").textContent = data.version;
+    // document.getElementById("ip_address").textContent = data.ip; // Moved to fetchPicoStatus
+    // document.getElementById("version").textContent = data.version; // Moved to fetchPicoStatus
     if (data.sens1_type != "sensor") {
         document.getElementById("sens1_Temp_current").style.color = "red";
-        }
-        
+    }
+            
     if (data.sens2_type != "sensor") {
         document.getElementById("sens2_Temp_current").style.color = "red";
-        }
-    
-    // --- 3. Store data in our master history object ---
-    chartDataStore.labels.push(timestamp);
-    chartDataStore.isoLabels.push(timestamp.toISOString());
-    chartDataStore.sens1_Temp.push(s1_Temp);
-    chartDataStore.sens1_RH.push(s1_RH);
-    chartDataStore.sens1_WBT.push(s1_WBT);
-    chartDataStore.sens2_Temp.push(s2_Temp);
-    chartDataStore.sens2_RH.push(s2_RH);
-    chartDataStore.userComments.push(userComment);
+    }
 
-    // --- 4. Update the chart's shared X-axis ---
-    sensorChart.data.labels.push(timestamp);
-    // --- 5. Push new data ONLY to actve datasets ---
-    sensorChart.data.datasets.forEach(dataset => {
-        const key = dataset.label;
-        if (key === 'sens1_Temp') dataset.data.push(s1_Temp);
-        if (key === 'sens1_RH') dataset.data.push(s1_RH);
-        if (key === 'sens1_WBT') dataset.data.push(s1_WBT);
-        if (key === 'sens2_Temp') dataset.data.push(s2_Temp);
-        if (key === 'sens2_RH') dataset.data.push(s2_RH);
-    });
+    // --- 3. Store data in our master history object (LOGGING) ---
+    // We only log if the Pico is actively running the acquisition timer.
+    // This assumes the Pico only updates sensor data once every 30s.
+    // If Pico runs the acquisition, we log it. If Pico is stopped, we only display the last status.
+    if (isPicoRunning) { 
+        chartDataStore.labels.push(timestamp);
+        chartDataStore.isoLabels.push(timestamp.toISOString());
+        chartDataStore.sens1_Temp.push(s1_Temp);
+        chartDataStore.sens1_RH.push(s1_RH);
+        chartDataStore.sens1_WBT.push(s1_WBT);
+        chartDataStore.sens2_Temp.push(s2_Temp);
+        chartDataStore.sens2_RH.push(s2_RH);
+        chartDataStore.userComments.push(userComment);
 
-    // --- 6. Redraw the chart ---
-    sensorChart.update('none');
+        // --- 4. Update the chart's shared X-axis ---
+        sensorChart.data.labels.push(timestamp);
+        // --- 5. Push new data ONLY to actve datasets ---
+        sensorChart.data.datasets.forEach(dataset => {
+            const key = dataset.label;
+            if (key === 'sens1_Temp') dataset.data.push(s1_Temp);
+            if (key === 'sens1_RH') dataset.data.push(s1_RH);
+            if (key === 'sens1_WBT') dataset.data.push(s1_WBT);
+            if (key === 'sens2_Temp') dataset.data.push(s2_Temp);
+            if (key === 'sens2_RH') dataset.data.push(s2_RH);
+        });
+
+        // --- 6. Redraw the chart ---
+        sensorChart.update('none');
         
-    if (flag == true && data.isPicoSubmitMongo == "False") {
-        // Clean data and submit to MongoDB
-        if (document.getElementById('submitMongo-checkbox').checked) {
+        // --- 7. Client-Side Submission ---
+        // Only submit from the client if Pico is NOT handling submission.
+        if (clientfFlagSubmits && !isPicoSubmitting) {
             submitData(data);
-            }
         }
+    }
 }
 
 //////////////////////////////////////////////
@@ -269,29 +355,32 @@ function updateVisibleDatasets() {
 }
 
 //////////////////////////////////////////////
-// Interval (Timer) Controls
+// Interval (Timer) Controls - ONLY FOR POLLING
 //////////////////////////////////////////////
 function startInterval() {
     stopInterval(); 
     
     const rateInput = document.getElementById("refreshRate");
-    const refreshRate = (parseInt(rateInput.value, 10) || 30) * 1000;
+    // Use a faster poll rate (e.g., 5 seconds) to check status/data quickly
+    // The acquisition itself is controlled by the Pico's 30-second interval
+    const refreshRate = (parseInt(rateInput.value, 10) || 5) * 1000; 
     
-    updatePlot(true);
-    //intervalId = setInterval(updatePlot, refreshRate);
+    // Check initial status/data
+    updatePlot(); 
+    
     intervalId = setInterval( () => {
-        updatePlot(true);
+        updatePlot();
         },
         refreshRate
     );
-    console.log(`Interval started with rate: ${refreshRate}ms`);
+    console.log(`Polling interval started with rate: ${refreshRate}ms`);
 }
 
 function stopInterval() {
     if (intervalId) {
         clearInterval(intervalId);
         intervalId = null;
-        console.log("Interval stopped.");
+        console.log("Polling interval stopped.");
     }
 }
 
@@ -395,6 +484,105 @@ function toggleZoomMode() {
     sensorChart.update('none'); 
 }
 
+
+// Synchronizes the JS button and isPicoRunning flag with the Pico's actual status.
+async function syncPicoStatus() {
+    try {
+        const response = await fetch('/api/acquisition_status');
+        const result = await response.json();
+        
+        const toggleBtn = document.getElementById('toggleButton');
+
+        if (response.ok && result.status) {
+            isPicoRunning = (result.status === "running");
+            interval = result.interval;
+            console.log(interval);
+            document.getElementById('refreshRate').value = result.interval;
+            
+
+            if (isPicoRunning) {
+                toggleBtn.textContent = 'Stop Acquisition';
+                toggleBtn.classList.remove('stopped');
+                if (!intervalId) startInterval(); // Ensure polling is running if Pico is running
+            } else {
+                toggleBtn.textContent = 'Start Acquisition';
+                toggleBtn.classList.add('stopped');
+            }
+        } else {
+            console.error('Failed to get Pico acquisition status.');
+            // Display an error state on the button
+            toggleBtn.textContent = 'Acquisition (Error)';
+            toggleBtn.classList.add('stopped');
+        }
+    } catch (error) {
+        console.error('Network error during status sync:', error);
+        // Display an error state on the button
+        document.getElementById('toggleButton').textContent = 'Acquisition (Network Error)';
+        document.getElementById('toggleButton').classList.add('stopped');
+    }
+}
+
+//////////////////////////////////////////////
+// Main Button Toggle Logic
+//////////////////////////////////////////////
+async function toggleAcquisition() {
+    const intervalInput = document.getElementById("refreshRate");
+    const intervalSeconds = parseInt(intervalInput.value, 10);
+
+    const newInterval = (intervalSeconds && intervalSeconds >= 1) ? intervalSeconds : 30;
+    const command = isPicoRunning ? 'stop' : 'start';
+    const newStatus = await sendControlCommand(command, newInterval);
+    
+    if (newStatus) {
+        // Update local state and button based on the Pico's reported new status
+        isPicoRunning = (newStatus === "running");
+        syncPicoStatus();
+        
+        // If acquisition started, manually trigger an immediate plot update
+        if (isPicoRunning) {
+            updatePlot();
+        }
+    }
+}
+//////////////////////////////////////////////
+// Refresh rate change Logic
+//////////////////////////////////////////////
+async function refreshRateLogic() {
+    const intervalInput = document.getElementById("refreshRate");
+    const intervalSeconds = parseInt(intervalInput.value, 10);
+
+    const newInterval = (intervalSeconds && intervalSeconds >= 1) ? intervalSeconds : 30;
+    
+    console.log(isPicoRunning);
+    
+    if (isPicoRunning) {
+        let newStatus = await sendControlCommand('stop', newInterval);
+        if (newStatus) {
+            syncPicoStatus();
+        }
+        newStatus = await sendControlCommand('start', newInterval);
+        if (newStatus) {
+            syncPicoStatus();
+        }
+        
+        console.log(`Polling interval started with rate: ${intervalInput.value}s`);
+        console.log(isPicoRunning);
+    }
+    /*
+    if (newStatus) {
+        // Update local state and button based on the Pico's reported new status
+        isPicoRunning = (newStatus === "running");
+        syncPicoStatus();
+        
+        // If acquisition started, manually trigger an immediate plot update
+        if (isPicoRunning) {
+            updatePlot();
+        }
+    }
+    */
+}
+
+
 // Function to reset the zoom
 function resetZoom() {
     sensorChart.resetZoom();
@@ -483,7 +671,7 @@ async function submitData(data) {
 //////////////////////////////////////////////
 // Page Load Event
 //////////////////////////////////////////////
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     // --- Get Element References ---
     const toggleBtn = document.getElementById('toggleButton');
     const clearBtn = document.getElementById('clearButton'); // <-- NEW
@@ -498,6 +686,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Initialize the Chart ---
     initChart();
     
+    // --- Get/Display initial data and sync Pico state ---
+    await fetchPicoStatus(false); // Get basic info and initial data
+    await syncPicoStatus(); // Check the Pico's current running state and update the button
+    
     // --- Get/Display current data ---
     updatePlot(false);
 
@@ -509,18 +701,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Add Event Listeners ---
     // Start/Stop Button
-    toggleBtn.addEventListener('click', () => {
-        isCollecting = !isCollecting;
-        if (isCollecting) {
-            toggleBtn.textContent = 'Stop';
-            toggleBtn.classList.remove('stopped');
-            startInterval();
-        } else {
-            toggleBtn.textContent = 'Start';
-            toggleBtn.classList.add('stopped');
-            stopInterval();
-        }
-    });
+    // Start/Stop Button
+    toggleBtn.addEventListener('click', toggleAcquisition);
 
     // Clear Button
     clearBtn.addEventListener('click', clearPlot);
@@ -528,14 +710,16 @@ document.addEventListener('DOMContentLoaded', () => {
     // Zoom-Pan buttons
     zoomBtn.addEventListener('click', toggleZoomMode);
     resetZoomBtn.addEventListener('click', resetZoom);
+    
+    refreshInput.addEventListener('change', refreshRateLogic);
 
     // Refresh Rate Input
-    refreshInput.addEventListener('change', () => {
-        if (isCollecting) {
-            startInterval();
-        }
-    });
-
+    //refreshInput.addEventListener('change', () => {
+    //    if (isCollecting) {
+    //        startInterval();
+    //    }
+    //});
+    
     // Checkboxes
     checkboxes.forEach(cb => {
         cb.addEventListener('change', updateVisibleDatasets);
