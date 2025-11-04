@@ -236,7 +236,10 @@ class LabServer:
         @self.server.route("/api/status", methods=[GET])
         def api_status(request):
             data_dict = self.assembleJson()
-            print(data_dict)
+            
+            print("\nSensor collected data:")
+            print("-" * 40)
+            print(f"{data_dict}\n")
         
             try:
                 submitMongo = request.query_params.get("submitMongo")
@@ -244,7 +247,7 @@ class LabServer:
                 submitMongo = request.args.get("submitMongo")
                                 
             if submitMongo.lower() == 'true' and self.isPicoSubmitMongo.lower() == 'true':
-                print("Submitting data to MongoDB")
+                print("\nSubmitting data to MongoDB")
                 url = self.mongoURL+"/LabMonitorDB/api/submit-sensor-data"
                 self.sendDataMongo(url, data_dict)
 
@@ -331,16 +334,16 @@ class LabServer:
             if is_acquisition_running:
                 current_time = time.monotonic()
                 if (current_time - last_acquisition_time) >= ACQUISITION_INTERVAL:
-                    print("-" * 20)
-                    print(f"Scheduled acquisition triggered at {current_time:.2f}")
+                    print(f"\nScheduled acquisition triggered at {current_time:.2f}")
+                    print("-" * 40)
                     
                     # Your existing logic from /api/status, but without the HTTP wrapper
                     data_dict = self.assembleJson()
-                    print(data_dict)
+                    #print(data_dict)
                     
                     # Log to MongoDB if configured for Pico submission
                     if self.isPicoSubmitMongo.lower() == 'true':
-                        print("Submitting scheduled data to MongoDB")
+                        print("\nSubmitting scheduled data to MongoDB")
                         url = self.mongoURL + "/LabMonitorDB/api/submit-sensor-data"
                         self.sendDataMongo(url, data_dict)
                     
