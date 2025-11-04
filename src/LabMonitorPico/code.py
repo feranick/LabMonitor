@@ -25,7 +25,7 @@ import adafruit_ntp
 
 is_acquisition_running = False
 last_acquisition_time = 0.0
-ACQUISITION_INTERVAL = 30.0 # Your desired interval in seconds
+ACQUISITION_INTERVAL = 30.0 
 
 # MCP9808 ONLY
 import adafruit_mcp9808

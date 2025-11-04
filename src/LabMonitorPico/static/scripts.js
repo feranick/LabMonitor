@@ -165,7 +165,6 @@ async function fetchPicoStatus(flag) {
     }
 }
 
-
 //////////////////////////////////////////////
 // Sends a command to the Pico to start or stop the scheduled acquisition.
 //////////////////////////////////////////////
