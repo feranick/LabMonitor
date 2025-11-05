@@ -24,7 +24,7 @@ from adafruit_httpserver import Server, MIMETypes, Response, GET, POST, JSONResp
 
 import adafruit_ntp
 
-from libSensors import *
+from libSensors import SensorDevices
 
 is_acquisition_running = False
 last_acquisition_time = 0.0
@@ -476,12 +476,12 @@ class LabServer:
         except Exception as e:
             print(f"An error occurred during the POST request: {e}")
     
-
 ############################
 # Control, Sensors
 ############################
 class Sensors:
     def __init__(self, conf):
+        self.sensDev = SensorDevices()
         self.envSensor1 = None
         self.envSensor2 = None
         self.envSensor1Name = conf.sensor1
@@ -492,8 +492,8 @@ class Sensors:
         self.sensor2CorrectTemp = conf.sensor2CorrectTemp
 
 
-        self.envSensor1 = initSensor(conf.sensor1, conf.sensor1Pins)
-        self.envSensor2 = initSensor(conf.sensor2, conf.sensor2Pins)
+        self.envSensor1 = self.sensDev.initSensor(conf.sensor1, conf.sensor1Pins)
+        self.envSensor2 = self.sensDev.initSensor(conf.sensor2, conf.sensor2Pins)
 
         if self.envSensor1 != None:
             self.avDeltaT = microcontroller.cpu.temperature - self.envSensor1.temperature
@@ -511,7 +511,7 @@ class Sensors:
             else:
                 return {'temperature': f"{round(t_cpu, 1)} ", 'RH': '--', 'pressure': '--', 'type': 'CPU raw'}
         try:
-            envSensorData = getSensorData(envSensor, envSensorName, correctTemp)
+            envSensorData = self.sensDev.getSensorData(envSensor, envSensorName, correctTemp)
             delta_t = t_cpu - float(envSensorData['temperature'])
             if self.numTimes >= 2e+1:
                 self.numTimes = int(1e+1)
@@ -524,7 +524,7 @@ class Sensors:
             print(f"{envSensorName} not available. Av CPU/MCP T diff: {self.avDeltaT}")
             time.sleep(0.5)
             return {'temperature': f"{round(t_cpu-self.avDeltaT, 1)}", 'RH': '--', 'pressure': '--', 'type': 'CPU adj'}
-        
+            
 ############################
 # Utilities
 ############################
