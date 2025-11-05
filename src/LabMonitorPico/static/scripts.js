@@ -19,6 +19,8 @@ const chartDataStore = {
     sens1_WBT: [],
     sens2_Temp: [],
     sens2_RH: [],
+    sens3_Temp: [],
+    sens3_RH: [],
     userComments: []
 };
 
@@ -260,7 +262,7 @@ async function updatePlot() {
         document.getElementById("sens2_Temp_current").style.color = "red";
     }
     
-    f (data.sens3_type != "sensor") {
+    if (data.sens3_type != "sensor") {
         document.getElementById("sens3_Temp_current").style.color = "red";
     }
 
