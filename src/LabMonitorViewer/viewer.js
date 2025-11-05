@@ -1,4 +1,4 @@
-let version = "2025.11.2.1";
+let version = "2025.11.5.2";
 let sensorChart;
 let hoveredDataIndex = -1;
 let nameSelIndex="LabMonitorViewer_device_dropdown";
@@ -12,6 +12,8 @@ const chartDataStore = {
     sens1_WBT: [],
     sens2_Temp: [],
     sens2_RH: [],
+    sens3_Temp: [],
+    sens3_RH: [],
     userComments: []
 };
 
@@ -153,6 +155,8 @@ async function fetchAndDisplayData() {
             chartDataStore.sens1_WBT.push(parseFloat(s1_WBT_string) || null);
             chartDataStore.sens2_Temp.push(parseFloat(point.sens2_Temp) || null);
             chartDataStore.sens2_RH.push(parseFloat(point.sens2_RH) || null);
+            chartDataStore.sens3_Temp.push(parseFloat(point.sens3_Temp) || null);
+            chartDataStore.sens3_RH.push(parseFloat(point.sens3_RH) || null);
             chartDataStore.userComments.push(point.user_comment || "");
         });
 
@@ -265,6 +269,8 @@ function clearPlot() {
     chartDataStore.sens1_WBT = [];
     chartDataStore.sens2_Temp = [];
     chartDataStore.sens2_RH = [];
+    chartDataStore.sens3_Temp = [];
+    chartDataStore.sens3_RH = [];
 
     sensorChart.data.labels = [];
     sensorChart.data.datasets.forEach(dataset => {
@@ -292,7 +298,7 @@ function exportToPng() {
 }
 
 function exportToCsv() {
-    const headers = ['timestamp', 'sens1_Temp', 'sens1_RH', 'sens1_WBT', 'sens2_Temp', 'sens2_RH'];
+    const headers = ['timestamp', 'sens1_Temp', 'sens1_RH', 'sens1_WBT', 'sens2_Temp', 'sens2_RH', 'sens3_Temp', 'sens3_RH'];
     let csvContent = "data:text/csv;charset=utf-8," + headers.join(',') + "\n";
 
     for (let i = 0; i < chartDataStore.isoLabels.length; i++) {
@@ -302,7 +308,9 @@ function exportToCsv() {
             chartDataStore.sens1_RH[i],
             chartDataStore.sens1_WBT[i], 
             chartDataStore.sens2_Temp[i],
-            chartDataStore.sens2_RH[i]
+            chartDataStore.sens2_RH[i],
+            chartDataStore.sens3_Temp[i],
+            chartDataStore.sens3_RH[i]
         ];
         csvContent += row.join(',') + "\n";
     }
@@ -456,6 +464,7 @@ const FixedInfoPlugin = {
         const wbt1 = chartDataStore.sens1_WBT[index];
         const rh1 = chartDataStore.sens1_RH[index];
         const temp2 = chartDataStore.sens2_Temp[index];
+        const temp3 = chartDataStore.sens3_Temp[index];
         const comment = (chartDataStore.userComments[index] || "").trim();
 
         // --- Prepare Text Lines ---
@@ -465,6 +474,7 @@ const FixedInfoPlugin = {
             `S1 WBT: ${wbt1 !== null ? wbt1 + ' °C' : '--'}`,
             `S1 RH: ${rh1 !== null ? rh1 + ' %' : '--'}`,
             `S2 Temp: ${temp2 !== null ? temp2 + ' °C' : '--'}`,
+            `S3 Temp: ${temp3 !== null ? temp3 + ' °C' : '--'}`,
         ];
         
         // Add comment only if it exists and isn't the default placeholder

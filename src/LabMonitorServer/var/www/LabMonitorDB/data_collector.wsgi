@@ -197,7 +197,11 @@ def get_data():
                 "sens2_Temp": doc.get("sens2_Temp"),
                 "sens2_RH": doc.get("sens2_RH"),
                 "sens2_P": doc.get("sens2_P"),
-                "sens2_type": doc.get("sens2_type"),
+                "sens2_type": doc.get("sens3_type"),
+                "sens3_Temp": doc.get("sens3_Temp"),
+                "sens3_RH": doc.get("sens3_RH"),
+                "sens3_P": doc.get("sens3_P"),
+                "sens3_type": doc.get("sens3_type"),
                 "device_name": doc.get("device_name"),
                 "user_comment": doc.get("user_comment", ""),
                 "UTC": doc.get("UTC")

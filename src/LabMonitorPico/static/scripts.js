@@ -227,6 +227,8 @@ async function updatePlot() {
     const s1_RH = parseFloat(data.sens1_RH) || null;
     const s2_Temp = parseFloat(data.sens2_Temp) || null;
     const s2_RH = parseFloat(data.sens2_RH) || null;
+    const s3_Temp = parseFloat(data.sens3_Temp) || null;
+    const s3_RH = parseFloat(data.sens3_RH) || null;
     const s1_WBT_string = getWebBulbTemp(data.sens1_Temp, data.sens1_RH, data.sens1_type);
     const s1_WBT = parseFloat(s1_WBT_string) || null;
     
@@ -248,12 +250,18 @@ async function updatePlot() {
     document.getElementById("sens1_WBT_current").textContent = s1_WBT_string + " \u00B0C"; 
     document.getElementById("sens2_Temp_current").textContent = data.sens2_Temp + " \u00B0C";
     document.getElementById("sens2_Temp_current").style.color = "#00008B";
+    ocument.getElementById("sens3_Temp_current").textContent = data.sens3_Temp + " \u00B0C";
+    document.getElementById("sens3_Temp_current").style.color = "#00008B";
     if (data.sens1_type != "sensor") {
         document.getElementById("sens1_Temp_current").style.color = "red";
     }
             
     if (data.sens2_type != "sensor") {
         document.getElementById("sens2_Temp_current").style.color = "red";
+    }
+    
+    f (data.sens3_type != "sensor") {
+        document.getElementById("sens3_Temp_current").style.color = "red";
     }
 
     // --- 3. Store data in our master history object (LOGGING) ---
@@ -265,6 +273,8 @@ async function updatePlot() {
         chartDataStore.sens1_WBT.push(s1_WBT);
         chartDataStore.sens2_Temp.push(s2_Temp);
         chartDataStore.sens2_RH.push(s2_RH);
+        chartDataStore.sens3_Temp.push(s3_Temp);
+        chartDataStore.sens3_RH.push(s3_RH);
         chartDataStore.userComments.push(userComment);
 
         // --- 4. Update the chart's shared X-axis ---
@@ -277,6 +287,8 @@ async function updatePlot() {
             if (key === 'sens1_WBT') dataset.data.push(s1_WBT);
             if (key === 'sens2_Temp') dataset.data.push(s2_Temp);
             if (key === 'sens2_RH') dataset.data.push(s2_RH);
+            if (key === 'sens3_Temp') dataset.data.push(s3_Temp);
+            if (key === 'sens3_RH') dataset.data.push(s3_RH);
         });
 
         // --- 6. Redraw the chart ---
@@ -361,6 +373,8 @@ function clearPlot() {
     chartDataStore.sens1_WBT = [];
     chartDataStore.sens2_Temp = [];
     chartDataStore.sens2_RH = [];
+    chartDataStore.sens3_Temp = [];
+    chartDataStore.sens3_RH = [];
 
     // 2. Clear the chart's visible data
     sensorChart.data.labels = [];
@@ -393,7 +407,7 @@ function exportToPng() {
 }
 
 function exportToCsv() {
-    const headers = ['timestamp', 'sens1_Temp', 'sens1_RH', 'sens1_WBT', 'sens2_Temp', 'sens2_RH'];
+    const headers = ['timestamp', 'sens1_Temp', 'sens1_RH', 'sens1_WBT', 'sens2_Temp', 'sens2_RH', 'sens3_Temp', 'sens3_RH'];
     let csvContent = "data:text/csv;charset=utf-8," + headers.join(',') + "\n";
 
     for (let i = 0; i < chartDataStore.isoLabels.length; i++) {
@@ -403,7 +417,9 @@ function exportToCsv() {
             chartDataStore.sens1_RH[i],
             chartDataStore.sens1_WBT[i], 
             chartDataStore.sens2_Temp[i],
-            chartDataStore.sens2_RH[i]
+            chartDataStore.sens2_RH[i],
+            chartDataStore.sens3_Temp[i],
+            chartDataStore.sens3_RH[i]
         ];
         csvContent += row.join(',') + "\n";
     }
@@ -701,6 +717,7 @@ const FixedInfoPlugin = {
         const wbt1 = chartDataStore.sens1_WBT[index];
         const rh1 = chartDataStore.sens1_RH[index];
         const temp2 = chartDataStore.sens2_Temp[index];
+        const temp3 = chartDataStore.sens3_Temp[index];
         const comment = (chartDataStore.userComments[index] || "").trim();
 
         // --- Prepare Text Lines ---
@@ -710,6 +727,7 @@ const FixedInfoPlugin = {
             `S1 WBT: ${wbt1 !== null ? wbt1 + ' °C' : '--'}`,
             `S1 RH: ${rh1 !== null ? rh1 + ' %' : '--'}`,
             `S2 Temp: ${temp2 !== null ? temp2 + ' °C' : '--'}`,
+            `S3 Temp: ${temp3 !== null ? temp3 + ' °C' : '--'}`,
         ];
         
         // Add comment only if it exists and isn't the default placeholder
