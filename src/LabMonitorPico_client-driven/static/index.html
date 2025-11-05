@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>LabMonitor - Plotter</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="mobile-web-app-capable" content="yes" />
+<link rel="icon" type="image/x-icon" href="./favicon.ico">
+<link rel="icon" href="./icon.png">
+<link rel="apple-touch-icon" href="./icon180.png">
+<link rel="manifest" href="./manifest.json">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.2.0/dist/chartjs-plugin-zoom.min.js"></script>
+<style>
+    body {
+        font-family: Helvetica, sans-serif;
+        text-align: center;
+        background-color: #f0f0f0;
+        padding: 10px;
+    }
+    .chart-container {
+        width: 90%;
+        max-width: 1000px;
+        margin: 20px auto;
+        background-color: white;
+        padding: 10px;
+        border-radius: 10px;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    }
+    fieldset {
+        background-color: #C0C0C0;
+        max-width: 600px;
+        margin: 10px auto;
+        padding: 15px;
+        border: 1px solid #ccc;
+        border-radius: 10px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 15px;
+        justify-content: center;
+        align-items: center;
+    }
+    button, input[type="number"], input[type="text"] {
+        font-size: 16px;
+        padding: 8px 12px;
+        border-radius: 8px;
+        border: 2px solid #aaa;
+    }
+    button {
+        background-color: #155084;
+        color: white;
+        cursor: pointer;
+        border-color: #155084;
+    }
+    button:hover {
+        background-color: #1e62a0;
+    }
+    button#toggleButton.stopped {
+        background-color: #006400; /* Green for 'Start' */
+        border-color: #006400;
+    }
+
+    button#clearButton {
+        background-color: #a02c2c; /* Dark red */
+        border-color: #a02c2c;
+    }
+    button#clearButton:hover {
+        background-color: #c93434;
+    }
+
+    input[type="number"] {
+        width: 60px;
+        text-align: center;
+    }
+    input[type="text"] {
+        width: 400px;
+    }
+    .checkbox-group legend {
+        width: 100%; /* Ensure legend is on its own line */
+        font-weight: bold;
+    }
+    .checkbox-group label {
+        margin-right: 10px;
+    }
+
+    /* Copied from original for current measurements */
+    .two-column-layout {
+        display: flex;
+        gap: 5px;
+        text-align: left;
+        font-size: 18px;
+        width: 100%;
+    }
+    .column {
+        flex: 1;
+        padding-left: 10px;
+    }
+    fieldset span {
+        min-width: 50px;
+        display: inline-block;
+        font-weight: 700;
+        color: #00008B; /* Dark blue for values */
+    }
+    small { display: block; margin-top: 5px; }
+</style>
+
+</head>
+<body>
+<div class="chart-container">
+    <canvas id="sensorChart"></canvas>
+</div>
+
+<fieldset>
+    <legend style="width: 100%; text-align: center; font-weight: bold;">
+        Current Measurements (<span id="datetime_current">Time N/A</span>)
+    </legend>
+    <div class="two-column-layout">
+        <div class="column">
+            <strong>Sensor 1:</strong>
+            <br>Temperature:
+            <br>RH:
+            <br>Wet Bulb T:
+        </div>
+        <div class="column">
+            <br>
+            <span id="sens1_Temp_current">...</span>
+            <br><span id="sens1_RH_current">...</span>
+            <br><span id="sens1_WBT_current">...</span>
+        </div>
+        <div class="column">
+            <strong>Sensor 2:</strong>
+            <br>Temperature:
+        </div>
+        <div class="column">
+            <br>
+            <span id="sens2_Temp_current">...</span>
+        </div>
+    </div>
+</fieldset>
+
+<fieldset>
+    Comments: <input type="text" id="userComment">
+</fieldset>
+
+<fieldset>
+    <label for="refreshRate">Refresh (secs):</label>
+    <input type="number" id="refreshRate" value="30" min="1">
+    
+    <button id="toggleButton" class="stopped">Start</button>
+    <button id="clearButton">Clear Plot</button>
+    <div style="width: 100%; text-align: center;">
+    <button id="zoomButton">Toggle Pan/Zoom</button>
+    <button id="resetZoomButton">Reset Zoom</button>
+    </div>
+    <div style="width: 100%; text-align: center;">
+    <button id="savePngButton">Save Plot as PNG</button>
+    <button id="saveCsvButton">Save Data as CSV</button>
+    </div>
+    
+    <div style="width: 100%; text-align: center;">
+    <input type="checkbox" id="submitMongo-checkbox" checked>Save to Remote Server
+    </div>
+    </fieldset>
+<fieldset class="checkbox-group">
+    <label>
+        <input type="checkbox" class="data-checkbox" data-key="sens1_Temp" data-color="red" checked>
+        Sensor 1 Temp
+    </label>
+    <label>
+        <input type="checkbox" class="data-checkbox" data-key="sens1_WBT" data-color="purple" checked>
+        Sensor 1 WBT
+    </label>
+    <label>
+        <input type="checkbox" class="data-checkbox" data-key="sens2_Temp" data-color="green" checked>
+        Sensor 2 Temp
+    </label>
+    <label>
+        <input type="checkbox" class="data-checkbox" data-key="sens1_RH" data-color="blue">
+        Sensor 1 RH
+    </label>
+</fieldset>
+
+<button id="simpleUIBtn">Simple UI</button>
+
+<small><small>Device IP: <span id="ip_address">N/A</span></small></small>
+<small><small>Version: <span id="version">N/A</span></small></small>
+
+<script type="text/javascript" src="scripts.js" ></script>
+
+</body>
+</html>

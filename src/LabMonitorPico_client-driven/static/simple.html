@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>LabMonitor</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="mobile-web-app-capable" content="yes" />
+<link rel="icon" type="image/x-icon" href="./favicon.ico">
+<link rel="icon" href="./icon.png">
+<link rel="apple-touch-icon" href="./icon180.png">
+<link rel="manifest" href="./manifest.json">
+</head>
+<body>
+<style>
+body {
+    margin: 0;
+    font-family: Helvetica, sans-serif;
+    text-align: center;
+    padding: 11px 0;
+    font-size: 20px;
+    font-weight: bold;
+    background-color: #f0f0f0;
+}
+#Status {
+    color: white;
+    background-color: #155084;
+    font-size: 20px;
+    font-weight: bold;
+    margin: 10px auto 10px;
+    height: 100px;
+    width: 250px;
+    text-align: center;
+    border-radius: 15px;
+    border: none;
+    padding: 10px 20px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+#Status:hover { background-color: #1e62a0; }
+
+#refreshRate {
+    /* Basic modern style */
+    font-size: 18px;
+    padding: 6px 10px;
+    border: 2px solid #aaa;
+    border-radius: 8px; /* Rounded corners */
+    width: 80px; /* Constrained width */
+    text-align: center;
+    transition: border-color 0.3s, box-shadow 0.3s;
+    outline: none; /* Remove default blue focus outline */
+}
+
+#refreshRate:focus {
+    /* Focus state for clarity */
+    border-color: #155084; /* Border changes to the primary blue */
+    box-shadow: 0 0 0 3px rgba(21, 80, 132, 0.4); /* Custom blue glow/ring */
+}
+
+fieldset {
+    background-color: #C0C0C0;
+    color: black;
+    max-width: 350px;
+    margin: 10px auto;
+    padding: 20px;
+    border: 1px solid #ccc;
+    border-radius: 10px;
+}
+.two-column-layout {
+    display: flex;
+    gap: 5px;
+    text-align: center;
+    font-size: 24px;
+}
+.column {
+    flex: 1;
+}
+fieldset span {
+    min-width: 50px;
+    display: inline-block;
+    font-weight: 700;
+    color: #00008B; /* Dark blue for values */
+}
+
+button {
+    font-size: 16px;
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 2px solid #aaa;
+    background-color: #155084;
+    color: white;
+    cursor: pointer;
+    border-color: #155084;
+}
+button:hover {
+    background-color: #1e62a0;
+}
+
+small { display: block; margin-top: 5px; }
+</style>
+<script type="text/javascript" src="simple.js" ></script>
+
+<fieldset>
+Fixed Sensor
+<div class="two-column-layout">
+    <div class="column">
+        <br>Temperature:
+        <br>Rel. Humidity:
+        <br>Web bulb T:
+    </div>
+    <div class="column">
+        <br><span id="sens1_Temp">...</span>
+        <br><span id="sens1_RH">...</span>
+        <br><span id="sens1_WBT">...</span>
+    </div>
+</div>
+</fieldset>
+<fieldset>
+Mobile Sensor
+<div class="two-column-layout">
+    <div class="column">
+        <br>Temperature:
+        <!--<br>Rel. Humidity:-->
+    </div>
+    <div class="column">
+        <br><span id="sens2_Temp">...</span>
+        <!--<br><span id="sens2_RH">...</span>-->
+    </div>
+</div>
+</fieldset>
+
+<form name="statusForm">
+    <input type="button" id="Status" value="Update Status" onclick="updateStatus()" />
+    <br><label id="warnLabel"></label>
+</form>
+
+<fieldset>
+Refresh: <input id="refreshRate" value=10></input> s
+<small><span id="datetime">Time N/A</span></small>
+</fieldset>
+<button id="plotterUIBtn">Plotter</button>
+
+<small><small>Device IP: <span id="ip_address">N/A</span></small></small>
+<small><small>Version: <span id="version">N/A</span></small></small>
+</body>
+</html>
