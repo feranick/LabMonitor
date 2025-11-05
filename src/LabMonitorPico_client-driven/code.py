@@ -58,7 +58,7 @@ class Conf:
             self.sensor1CorrectTemp = os.getenv("sensor1CorrectTemp")
         except ValueError:
             self.sensor1 = None
-            self.sensor2Pins = None
+            self.sensor1Pins = None
             self.sensor1CorrectTemp = "False"
             print(f"Warning: Invalid settings.toml. Using default.")
 
