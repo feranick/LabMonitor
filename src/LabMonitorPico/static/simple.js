@@ -57,7 +57,7 @@ async function updateStatus(flag) {
     document.getElementById("sens1_RH").textContent = data.sens1_RH + "%";
     document.getElementById("sens1_WBT").textContent = getWetBulbTemp(data.sens1_Temp, data.sens1_RH, data.sens1_type) + " \u00B0C";
 
-    document.getElementById("sens2_Temp").textContent = data.sens3_Temp + " \u00B0C";
+    document.getElementById("sens2_Temp").textContent = data.sens2_Temp + " \u00B0C";
     document.getElementById("sens2_Temp").style.color = "#00008B";
     document.getElementById("sens3_Temp").textContent = data.sens3_Temp + " \u00B0C";
     document.getElementById("sens3_Temp").style.color = "#00008B";
