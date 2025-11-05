@@ -1,11 +1,11 @@
 # **********************************************
 # * LabMonitor - Rasperry Pico W
 # * Pico driven
-# * v2025.11.4.4
+# * v2025.11.5.1
 # * By: Nicola Ferralis <feranick@hotmail.com>
 # **********************************************
 
-version = "2025.11.4.4-pico-driven"
+version = "2025.11.5.1-pico-driven"
 
 import wifi
 import time
@@ -70,29 +70,31 @@ class Conf:
         try:
             self.sensor1 = os.getenv("sensor1")
             self.sensor1Pins = stringToArray(os.getenv("sensor1Pins"))
-            temperature_offset1 = os.getenv("sensor1TemperatureOffset")
-            if temperature_offset1 is not None:
-                self.sensor1TemperatureOffset = float(temperature_offset1)
-            else:
-                print("Warning: 'sensor1TemperatureOffset' not found in settings.toml. Using default.")
+            self.sensor1CorrectTemp = os.getenv("sensor1CorrectTemp")
+            #temperature_offset1 = os.getenv("sensor1TemperatureOffset")
+            #if temperature_offset1 is not None:
+            #    self.sensor1TemperatureOffset = float(temperature_offset1)
+            #else:
+            #    print("Warning: 'sensor1TemperatureOffset' not found in settings.toml. Using default.")
         except ValueError:
             self.sensor1 = None
             self.sensor2Pins = None
-            self.temperature_offset2 = 0
+            self.sensor1CorrectTemp = "False"
             print(f"Warning: Invalid settings.toml. Using default.")
 
         try:
             self.sensor2 = os.getenv("sensor2")
             self.sensor2Pins = stringToArray(os.getenv("sensor2Pins"))
-            temperature_offset2 = os.getenv("sensor2TemperatureOffset")
-            if temperature_offset2 is not None:
-                self.sensor2TemperatureOffset = float(temperature_offset2)
-            else:
-                print("Warning: 'sensor2TemperatureOffset' not found in settings.toml. Using default.")
+            self.sensor2CorrectTemp = os.getenv("sensor2CorrectTemp")
+            #temperature_offset2 = os.getenv("sensor2TemperatureOffset")
+            #if temperature_offset2 is not None:
+            #    self.sensor2TemperatureOffset = float(temperature_offset2)
+            #else:
+            #    print("Warning: 'sensor2TemperatureOffset' not found in settings.toml. Using default.")
         except ValueError:
             self.sensor2 = None
             self.sensor2Pins = None
-            self.temperature_offset2 = 0
+            self.sensor2CorrectTemp = "False"
             print(f"Warning: Invalid settings.toml. Using default.")
 
 ############################
@@ -384,8 +386,8 @@ class LabServer:
             return None
             
     def assembleJson(self):
-        sensData1 = self.sensors.getData(self.sensors.envSensor1, self.sensors.envSensor1Name, self.sensors.temp_offset1)
-        sensData2 = self.sensors.getData(self.sensors.envSensor2, self.sensors.envSensor2Name, self.sensors.temp_offset2)
+        sensData1 = self.sensors.getData(self.sensors.envSensor1, self.sensors.envSensor1Name, self.sensors.sensor1CorrectTemp)
+        sensData2 = self.sensors.getData(self.sensors.envSensor2, self.sensors.envSensor2Name, self.sensors.sensor1CorrectTemp)
 
         UTC = self.getUTC()
 
@@ -484,9 +486,9 @@ class Sensors:
         self.envSensor2Name = conf.sensor2
         self.envSensor1Pins = conf.sensor1Pins
         self.envSensor2Pins = conf.sensor2Pins
+        self.sensor1CorrectTemp = conf.sensor1CorrectTemp
+        self.sensor2CorrectTemp = conf.sensor2CorrectTemp
 
-        self.temp_offset1 = conf.sensor1TemperatureOffset
-        self.temp_offset2 = conf.sensor2TemperatureOffset
 
         self.envSensor1 = self.initSensor(conf.sensor1, conf.sensor1Pins)
         self.envSensor2 = self.initSensor(conf.sensor2, conf.sensor2Pins)
@@ -523,8 +525,12 @@ class Sensors:
         envSensor = adafruit_mcp9808.MCP9808(i2c)
         return envSensor
 
-    def getEnvDataMCP9808(self, envSensor):
-        return {'temperature': str(envSensor.temperature), 'RH': '--', 'pressure': '--'}
+    def getEnvDataMCP9808(self, envSensor, correctTemp):
+        t_envSensor = float(envSensor.temperature)
+        if correctTemp.lower() == 'true':
+            t_envSensor = correctTempMCP9808(t_envSensor,None)
+        return {'temperature': f"{round(t_envSensor,1)}", 'RH': "--", 'pressure': "--", 'type': 'sensor'}
+        #return {'temperature': str(envSensor.temperature), 'RH': '--', 'pressure': '--'}
 
     def initBME280(self, pins):
         from adafruit_bme280 import basic as adafruit_bme280
@@ -537,8 +543,13 @@ class Sensors:
         envSensor = adafruit_bme280.Adafruit_BME280_SPI(spi, bme_cs)
         return envSensor
 
-    def getEnvDataBME280(self, envSensor):
-        return {'temperature': str(envSensor.temperature), 'RH': str(envSensor.relative_humidity), 'pressure': str(envSensor.pressure)}
+    def getEnvDataBME280(self, envSensor, correctTemp):
+        t_envSensor = float(envSensor.temperature)
+        rh_envSensor = round(float(envSensor.humidity),1)
+        p_envSensor = int(float(envSensor.pressure))
+        if correctTemp.lower() == 'true':
+            t_envSensor = correctTempBME280(t_envSensor,rh_envSensor)
+        return {'temperature': f"{round(t_envSensor,1)}", 'RH': f"{rh_envSensor}", 'pressure': f"{p_envSensor}", 'type': 'sensor'}
 
     def initBME680(self, pins):
         import adafruit_bme680
@@ -551,8 +562,14 @@ class Sensors:
         envSensor = adafruit_bme680.Adafruit_BME680_SPI(spi, bme_cs)
         return envSensor
         
-    def getEnvDataBME680(self, envSensor):
-        return {'temperature': str(envSensor.temperature), 'RH': str(envSensor.humidity), 'pressure': str(envSensor.pressure)}
+    def getEnvDataBME680(self, envSensor, correctTemp):
+        t_envSensor = float(envSensor.temperature)
+        rh_envSensor = round(float(envSensor.humidity),1)
+        p_envSensor = int(float(envSensor.pressure))
+        if correctTemp.lower() == 'true':
+            t_envSensor = correctTempBME680(t_envSensor,rh_envSensor)
+        return {'temperature': f"{round(t_envSensor,1)}", 'RH': f"{rh_envSensor}", 'pressure': f"{p_envSensor}", 'type': 'sensor'}
+        #return {'temperature': str(envSensor.temperature), 'RH': str(envSensor.humidity), 'pressure': str(envSensor.pressure)}
         
     def initMAX31865(self, pins):
         import adafruit_max31865
@@ -566,9 +583,12 @@ class Sensors:
         return envSensor
         
     def getEnvDataMAX31865(self, envSensor):
-        return {'temperature': str(envSensor.temperature), 'RH': '--', 'pressure': '--'}
+        t_envSensor = float(envSensor.temperature)
+        if correctTemp.lower() == 'true':
+            t_envSensor = correctTempMAX31865(t_envSensor,None)
+        return {'temperature': f"{round(t_envSensor,1)}", 'RH': "--", 'pressure': "--", 'type': 'sensor'}
 
-    def getData(self, envSensor, envSensorName, temp_offset):
+    def getData(self, envSensor, envSensorName, correctTemp):
         t_cpu = microcontroller.cpu.temperature
         if not envSensor:
             print(f"{envSensorName} not initialized. Using CPU temp with estimated offset.")
@@ -577,39 +597,79 @@ class Sensors:
             else:
                 return {'temperature': f"{round(t_cpu, 1)} ", 'RH': '--', 'pressure': '--', 'type': 'CPU raw'}
         try:
-            envSensorData = self.getSensorData(envSensor, envSensorName)
-
-            t_envSensor = float(envSensorData['temperature']) + temp_offset
-            if envSensorName == "MCP9808":
-                rh_envSensor = "--"
-                p_envSensor = "--"
-            else:
-                rh_envSensor = round(float(envSensorData['RH']),1)
-                p_envSensor = int(float(envSensorData['pressure']))
-
-            delta_t = t_cpu - t_envSensor
+            envSensorData = self.getSensorData(envSensor, envSensorName, correctTemp)
+            delta_t = t_cpu - float(envSensorData['temperature'])
             if self.numTimes >= 2e+1:
                 self.numTimes = int(1e+1)
             self.avDeltaT = (self.avDeltaT * self.numTimes + delta_t)/(self.numTimes+1)
             self.numTimes += 1
             print(f"Av. CPU/MCP T diff: {self.avDeltaT} {self.numTimes}")
             time.sleep(0.5)
-            return {'temperature': f"{round(t_envSensor,1)}", 'RH': f"{rh_envSensor}", 'pressure': f"{p_envSensor}", 'type': 'sensor'}
+            #return {'temperature': f"{round(t_envSensor,1)}", 'RH': f"{rh_envSensor}", 'pressure': f"{p_envSensor}", 'type': 'sensor'}
+            return envSensorData
         except:
             print(f"{envSensorName} not available. Av CPU/MCP T diff: {self.avDeltaT}")
             time.sleep(0.5)
             return {'temperature': f"{round(t_cpu-self.avDeltaT, 1)}", 'RH': '--', 'pressure': '--', 'type': 'CPU adj'}
 
-    def getSensorData(self, envSensor, envSensorName):
+    def getSensorData(self, envSensor, envSensorName, correctTemp):
         if envSensorName == "MCP9808":
-            sensorData = self.getEnvDataMCP9808(envSensor)
+            sensorData = self.getEnvDataMCP9808(envSensor, correctTemp)
         elif envSensorName == "BME280":
-            sensorData = self.getEnvDataBME280(envSensor)
+            sensorData = self.getEnvDataBME280(envSensor, correctTemp)
         elif envSensorName == "BME680":
-            sensorData = self.getEnvDataBME680(envSensor)
+            sensorData = self.getEnvDataBME680(envSensor, correctTemp)
         elif envSensorName == "MAX31865":
-            sensorData = self.getEnvDataMAX31865(envSensor)
+            sensorData = self.getEnvDataMAX31865(envSensor, correctTemp)
         return sensorData
+        
+    
+# Temperature correction for BME280
+def correctTempBME280(mt, mh):
+    print("\nMEASURED T:",mt)
+
+    C_INTERCEPT     = -22.378940
+    C_MT            = 3.497112
+    C_MH            = -0.267584
+    C_MT_P2         = -0.060241
+    C_MT_MH         = 0.000282
+    C_MH_P2         = 0.003162
+    
+    rt_pred = C_INTERCEPT + \
+              (C_MT * mt) + \
+              (C_MH * mh) + \
+              (C_MT_P2 * (mt**2)) + \
+              (C_MT_MH * (mt * mh)) + \
+              (C_MH_P2 * (mh**2))
+              
+    print("\nREAL T:",rt_pred)
+    return rt_pred
+    
+# Temperature correction for BME280
+def correctTempBME680(mt, mh):
+    C_INTERCEPT     = -22.378940
+    C_MT            = 3.497112
+    C_MH            = -0.267584
+    C_MT_P2         = -0.060241
+    C_MT_MH         = 0.000282
+    C_MH_P2         = 0.003162
+    
+    rt_pred = C_INTERCEPT + \
+              (C_MT * mt) + \
+              (C_MH * mh) + \
+              (C_MT_P2 * (mt**2)) + \
+              (C_MT_MH * (mt * mh)) + \
+              (C_MH_P2 * (mh**2))
+    return rt_pred
+    
+# Temperature correction for BME280
+def correctTempMCP9808(mt, mh):
+    return mt
+    
+# Temperature correction for MAX31865
+def correctTempMax31865(mt, mh):
+    return mt
+
         
 ############################
 # Utilities
