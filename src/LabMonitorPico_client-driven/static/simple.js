@@ -71,7 +71,7 @@ async function updateStatus(flag) {
         document.getElementById("sens2_Temp").style.color = "red";
         }
         
-    if (data.sens2_type != "sensor") {
+    if (data.sens3_type != "sensor") {
         document.getElementById("sens3_Temp").style.color = "red";
         }
 
