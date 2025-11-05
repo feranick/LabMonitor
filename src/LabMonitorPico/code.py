@@ -24,7 +24,7 @@ from adafruit_httpserver import Server, MIMETypes, Response, GET, POST, JSONResp
 
 import adafruit_ntp
 
-from libSensors import Sensors
+from libSensors import *
 
 is_acquisition_running = False
 last_acquisition_time = 0.0
@@ -476,6 +476,54 @@ class LabServer:
         except Exception as e:
             print(f"An error occurred during the POST request: {e}")
     
+
+############################
+# Control, Sensors
+############################
+class Sensors:
+    def __init__(self, conf):
+        self.envSensor1 = None
+        self.envSensor2 = None
+        self.envSensor1Name = conf.sensor1
+        self.envSensor2Name = conf.sensor2
+        self.envSensor1Pins = conf.sensor1Pins
+        self.envSensor2Pins = conf.sensor2Pins
+        self.sensor1CorrectTemp = conf.sensor1CorrectTemp
+        self.sensor2CorrectTemp = conf.sensor2CorrectTemp
+
+
+        self.envSensor1 = initSensor(conf.sensor1, conf.sensor1Pins)
+        self.envSensor2 = initSensor(conf.sensor2, conf.sensor2Pins)
+
+        if self.envSensor1 != None:
+            self.avDeltaT = microcontroller.cpu.temperature - self.envSensor1.temperature
+        else:
+            self.avDeltaT = 0
+
+        self.numTimes = 1
+        
+    def getData(self, envSensor, envSensorName, correctTemp):
+        t_cpu = microcontroller.cpu.temperature
+        if not envSensor:
+            print(f"{envSensorName} not initialized. Using CPU temp with estimated offset.")
+            if self.numTimes > 1 and self.avDeltaT != 0 :
+                return {'temperature': f"{round(t_cpu - self.avDeltaT, 1)}", 'RH': '--', 'pressure': '--', 'type': 'CPU adj.'}
+            else:
+                return {'temperature': f"{round(t_cpu, 1)} ", 'RH': '--', 'pressure': '--', 'type': 'CPU raw'}
+        try:
+            envSensorData = getSensorData(envSensor, envSensorName, correctTemp)
+            delta_t = t_cpu - float(envSensorData['temperature'])
+            if self.numTimes >= 2e+1:
+                self.numTimes = int(1e+1)
+            self.avDeltaT = (self.avDeltaT * self.numTimes + delta_t)/(self.numTimes+1)
+            self.numTimes += 1
+            print(f"Av. CPU/MCP T diff: {self.avDeltaT} {self.numTimes}")
+            time.sleep(0.5)
+            return envSensorData
+        except:
+            print(f"{envSensorName} not available. Av CPU/MCP T diff: {self.avDeltaT}")
+            time.sleep(0.5)
+            return {'temperature': f"{round(t_cpu-self.avDeltaT, 1)}", 'RH': '--', 'pressure': '--', 'type': 'CPU adj'}
         
 ############################
 # Utilities
