@@ -28,20 +28,7 @@ from libSensors import SensorDevices
 
 is_acquisition_running = False
 last_acquisition_time = 0.0
-ACQUISITION_INTERVAL = 30.0 
-
-# MCP9808 ONLY
-#import adafruit_mcp9808
-#MCP_I2C_SCL = board.GP15
-#MCP_I2C_SDA = board.GP14
-
-# BME680 NS BME280 ONLY
-#import adafruit_bme680
-#from adafruit_bme280 import basic as adafruit_bme280
-#BME_CLK = board.GP18
-#BME_MOSI = board.GP19
-#BME_MISO = board.GP16
-#BME_OUT = board.GP17
+ACQUISITION_INTERVAL = 30.0
 
 ############################
 # Initial WiFi/Safe Mode Check
@@ -480,8 +467,7 @@ class Sensors:
         self.envSensor2Pins = conf.sensor2Pins
         self.sensor1CorrectTemp = conf.sensor1CorrectTemp
         self.sensor2CorrectTemp = conf.sensor2CorrectTemp
-
-
+        
         self.envSensor1 = self.sensDev.initSensor(conf.sensor1, conf.sensor1Pins)
         self.envSensor2 = self.sensDev.initSensor(conf.sensor2, conf.sensor2Pins)
 

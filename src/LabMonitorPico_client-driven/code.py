@@ -5,7 +5,7 @@
 # * By: Nicola Ferralis <feranick@hotmail.com>
 # **********************************************
 
-version = "2025.11.4.4-client-driven"
+version = "2025.11.5.1-client-driven"
 
 import wifi
 import time
@@ -25,20 +25,6 @@ from adafruit_httpserver import Server, MIMETypes, Response, GET, POST, JSONResp
 import adafruit_ntp
 
 from libSensors import SensorDevices
-
-# MCP9808 ONLY
-#import adafruit_mcp9808
-#MCP_I2C_SCL = board.GP15
-#MCP_I2C_SDA = board.GP14
-
-# BME680 NS BME280 ONLY
-#import adafruit_bme680
-#from adafruit_bme280 import basic as adafruit_bme280
-#These are no longer set here but on settings.toml
-#BME_CLK = board.GP18
-#BME_MOSI = board.GP19
-#BME_MISO = board.GP16
-#BME_OUT = board.GP17
 
 ############################
 # Initial WiFi/Safe Mode Check
@@ -406,7 +392,6 @@ class Sensors:
         self.envSensor2Pins = conf.sensor2Pins
         self.sensor1CorrectTemp = conf.sensor1CorrectTemp
         self.sensor2CorrectTemp = conf.sensor2CorrectTemp
-
 
         self.envSensor1 = self.sensDev.initSensor(conf.sensor1, conf.sensor1Pins)
         self.envSensor2 = self.sensDev.initSensor(conf.sensor2, conf.sensor2Pins)
