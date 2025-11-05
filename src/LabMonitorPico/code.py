@@ -73,11 +73,6 @@ class Conf:
             self.sensor1 = os.getenv("sensor1")
             self.sensor1Pins = stringToArray(os.getenv("sensor1Pins"))
             self.sensor1CorrectTemp = os.getenv("sensor1CorrectTemp")
-            #temperature_offset1 = os.getenv("sensor1TemperatureOffset")
-            #if temperature_offset1 is not None:
-            #    self.sensor1TemperatureOffset = float(temperature_offset1)
-            #else:
-            #    print("Warning: 'sensor1TemperatureOffset' not found in settings.toml. Using default.")
         except ValueError:
             self.sensor1 = None
             self.sensor2Pins = None
@@ -88,11 +83,6 @@ class Conf:
             self.sensor2 = os.getenv("sensor2")
             self.sensor2Pins = stringToArray(os.getenv("sensor2Pins"))
             self.sensor2CorrectTemp = os.getenv("sensor2CorrectTemp")
-            #temperature_offset2 = os.getenv("sensor2TemperatureOffset")
-            #if temperature_offset2 is not None:
-            #    self.sensor2TemperatureOffset = float(temperature_offset2)
-            #else:
-            #    print("Warning: 'sensor2TemperatureOffset' not found in settings.toml. Using default.")
         except ValueError:
             self.sensor2 = None
             self.sensor2Pins = None
