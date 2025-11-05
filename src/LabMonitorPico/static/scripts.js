@@ -252,7 +252,7 @@ async function updatePlot() {
     document.getElementById("sens1_WBT_current").textContent = s1_WBT_string + " \u00B0C"; 
     document.getElementById("sens2_Temp_current").textContent = data.sens2_Temp + " \u00B0C";
     document.getElementById("sens2_Temp_current").style.color = "#00008B";
-    ocument.getElementById("sens3_Temp_current").textContent = data.sens3_Temp + " \u00B0C";
+    document.getElementById("sens3_Temp_current").textContent = data.sens3_Temp + " \u00B0C";
     document.getElementById("sens3_Temp_current").style.color = "#00008B";
     if (data.sens1_type != "sensor") {
         document.getElementById("sens1_Temp_current").style.color = "red";
@@ -482,7 +482,7 @@ async function syncPicoStatus() {
         if (response.ok && result.status) {
             isPicoRunning = (result.status === "running");
             interval = result.interval;
-            console.log(interval);
+            console.log("Current acqusition interval: "+interval);
             document.getElementById('refreshRate').value = result.interval;
             
 
