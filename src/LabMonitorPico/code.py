@@ -528,7 +528,7 @@ class Sensors:
     def getEnvDataMCP9808(self, envSensor, correctTemp):
         t_envSensor = float(envSensor.temperature)
         if correctTemp.lower() == 'true':
-            t_envSensor = correctTempMCP9808(t_envSensor,None)
+            t_envSensor = self.correctTempMCP9808(t_envSensor)
         return {'temperature': f"{round(t_envSensor,1)}", 'RH': "--", 'pressure': "--", 'type': 'sensor'}
         #return {'temperature': str(envSensor.temperature), 'RH': '--', 'pressure': '--'}
 
@@ -548,7 +548,7 @@ class Sensors:
         rh_envSensor = round(float(envSensor.humidity),1)
         p_envSensor = int(float(envSensor.pressure))
         if correctTemp.lower() == 'true':
-            t_envSensor = correctTempBME280(t_envSensor,rh_envSensor)
+            t_envSensor = self.correctTempBME280(t_envSensor,rh_envSensor)
         return {'temperature': f"{round(t_envSensor,1)}", 'RH': f"{rh_envSensor}", 'pressure': f"{p_envSensor}", 'type': 'sensor'}
 
     def initBME680(self, pins):
@@ -566,7 +566,7 @@ class Sensors:
         t_envSensor = float(envSensor.temperature)
         rh_envSensor = round(float(envSensor.humidity),1)
         p_envSensor = int(float(envSensor.pressure))
-        if correctTemp.lower() == 'true':
+        if self.correctTemp.lower() == 'true':
             t_envSensor = correctTempBME680(t_envSensor,rh_envSensor)
         return {'temperature': f"{round(t_envSensor,1)}", 'RH': f"{rh_envSensor}", 'pressure': f"{p_envSensor}", 'type': 'sensor'}
         #return {'temperature': str(envSensor.temperature), 'RH': str(envSensor.humidity), 'pressure': str(envSensor.pressure)}
@@ -585,7 +585,7 @@ class Sensors:
     def getEnvDataMAX31865(self, envSensor):
         t_envSensor = float(envSensor.temperature)
         if correctTemp.lower() == 'true':
-            t_envSensor = correctTempMAX31865(t_envSensor,None)
+            t_envSensor = self.correctTempMAX31865(t_envSensor)
         return {'temperature': f"{round(t_envSensor,1)}", 'RH': "--", 'pressure': "--", 'type': 'sensor'}
 
     def getData(self, envSensor, envSensorName, correctTemp):
@@ -623,52 +623,47 @@ class Sensors:
             sensorData = self.getEnvDataMAX31865(envSensor, correctTemp)
         return sensorData
         
-    
-# Temperature correction for BME280
-def correctTempBME280(mt, mh):
-    print("\nMEASURED T:",mt)
-
-    C_INTERCEPT     = -22.378940
-    C_MT            = 3.497112
-    C_MH            = -0.267584
-    C_MT_P2         = -0.060241
-    C_MT_MH         = 0.000282
-    C_MH_P2         = 0.003162
-    
-    rt_pred = C_INTERCEPT + \
-              (C_MT * mt) + \
-              (C_MH * mh) + \
-              (C_MT_P2 * (mt**2)) + \
-              (C_MT_MH * (mt * mh)) + \
-              (C_MH_P2 * (mh**2))
-              
-    print("\nREAL T:",rt_pred)
-    return rt_pred
-    
-# Temperature correction for BME280
-def correctTempBME680(mt, mh):
-    C_INTERCEPT     = -22.378940
-    C_MT            = 3.497112
-    C_MH            = -0.267584
-    C_MT_P2         = -0.060241
-    C_MT_MH         = 0.000282
-    C_MH_P2         = 0.003162
-    
-    rt_pred = C_INTERCEPT + \
-              (C_MT * mt) + \
-              (C_MH * mh) + \
-              (C_MT_P2 * (mt**2)) + \
-              (C_MT_MH * (mt * mh)) + \
-              (C_MH_P2 * (mh**2))
-    return rt_pred
-    
-# Temperature correction for BME280
-def correctTempMCP9808(mt, mh):
-    return mt
-    
-# Temperature correction for MAX31865
-def correctTempMax31865(mt, mh):
-    return mt
+    # Temperature correction for BME280
+    def correctTempBME280(self, mt, mh):
+        C_INTERCEPT     = -22.378940
+        C_MT            = 3.497112
+        C_MH            = -0.267584
+        C_MT_P2         = -0.060241
+        C_MT_MH         = 0.000282
+        C_MH_P2         = 0.003162
+        
+        rt_pred = C_INTERCEPT + \
+                  (C_MT * mt) + \
+                  (C_MH * mh) + \
+                  (C_MT_P2 * (mt**2)) + \
+                  (C_MT_MH * (mt * mh)) + \
+                  (C_MH_P2 * (mh**2))
+        return rt_pred
+        
+    # Temperature correction for BME280
+    def correctTempBME680(self, mt, mh):
+        C_INTERCEPT     = -22.378940
+        C_MT            = 3.497112
+        C_MH            = -0.267584
+        C_MT_P2         = -0.060241
+        C_MT_MH         = 0.000282
+        C_MH_P2         = 0.003162
+        
+        rt_pred = C_INTERCEPT + \
+                  (C_MT * mt) + \
+                  (C_MH * mh) + \
+                  (C_MT_P2 * (mt**2)) + \
+                  (C_MT_MH * (mt * mh)) + \
+                  (C_MH_P2 * (mh**2))
+        return rt_pred
+        
+    # Temperature correction for BME280
+    def correctTempMCP9808(self, mt):
+        return mt
+        
+    # Temperature correction for MAX31865
+    def correctTempMax31865(self, mt):
+        return mt
 
         
 ############################
