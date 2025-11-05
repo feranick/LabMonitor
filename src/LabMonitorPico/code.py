@@ -1,11 +1,11 @@
 # **********************************************
 # * LabMonitor - Rasperry Pico W
 # * Pico driven
-# * v2025.11.4.3
+# * v2025.11.4.4
 # * By: Nicola Ferralis <feranick@hotmail.com>
 # **********************************************
 
-version = "2025.11.4.3-pico-driven"
+version = "2025.11.4.4-pico-driven"
 
 import wifi
 import time
@@ -502,10 +502,14 @@ class Sensors:
         try:
             if envSensorName == "MCP9808":
                 envSensor = self.initMCP9808(pins)
-            if envSensorName == "BME280":
+            elif envSensorName == "BME280":
                 envSensor = self.initBME280(pins)
-            if envSensorName == "BME680":
+            elif envSensorName == "BME680":
                 envSensor = self.initBME680(pins)
+            elif envSensorName == "MAX31865":
+                envSensor = self.initMAX31865(pins)
+            else:
+                envSensor = None
             print(f"Temperature sensor ({envSensorName}) found and initialized.")
             return envSensor
         except Exception as e:
@@ -549,6 +553,20 @@ class Sensors:
         
     def getEnvDataBME680(self, envSensor):
         return {'temperature': str(envSensor.temperature), 'RH': str(envSensor.humidity), 'pressure': str(envSensor.pressure)}
+        
+    def initMAX31865(self, pins):
+        import adafruit_max31865
+        BME_CLK = getattr(board, "GP" + str(pins[0]))
+        BME_MOSI = getattr(board, "GP" + str(pins[1]))
+        BME_MISO = getattr(board, "GP" + str(pins[2]))
+        BME_OUT = getattr(board, "GP" + str(pins[3]))
+        spi = busio.SPI(BME_CLK, MISO=BME_MISO, MOSI=BME_MOSI)
+        bme_cs = digitalio.DigitalInOut(BME_OUT)
+        envSensor = adafruit_max31865.MAX31865(spi, bme_cs)
+        return envSensor
+        
+    def getEnvDataMAX31865(self, envSensor):
+        return {'temperature': str(envSensor.temperature), 'RH': '--', 'pressure': '--'}
 
     def getData(self, envSensor, envSensorName, temp_offset):
         t_cpu = microcontroller.cpu.temperature
@@ -589,6 +607,8 @@ class Sensors:
             sensorData = self.getEnvDataBME280(envSensor)
         elif envSensorName == "BME680":
             sensorData = self.getEnvDataBME680(envSensor)
+        elif envSensorName == "MAX31865":
+            sensorData = self.getEnvDataMAX31865(envSensor)
         return sensorData
         
 ############################
