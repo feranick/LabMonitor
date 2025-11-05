@@ -1,10 +1,11 @@
 # **********************************************
 # * LabMonitor - Rasperry Pico W
-# * v2025.11.4.1
+# * Pico driven
+# * v2025.11.4.3
 # * By: Nicola Ferralis <feranick@hotmail.com>
 # **********************************************
 
-version = "2025.11.4.1"
+version = "2025.11.4.3-pico-driven"
 
 import wifi
 import time
@@ -28,17 +29,17 @@ last_acquisition_time = 0.0
 ACQUISITION_INTERVAL = 30.0 
 
 # MCP9808 ONLY
-import adafruit_mcp9808
-MCP_I2C_SCL = board.GP15
-MCP_I2C_SDA = board.GP14
+#import adafruit_mcp9808
+#MCP_I2C_SCL = board.GP15
+#MCP_I2C_SDA = board.GP14
 
 # BME680 NS BME280 ONLY
 #import adafruit_bme680
-from adafruit_bme280 import basic as adafruit_bme280
-BME_CLK = board.GP18
-BME_MOSI = board.GP19
-BME_MISO = board.GP16
-BME_OUT = board.GP17
+#from adafruit_bme280 import basic as adafruit_bme280
+#BME_CLK = board.GP18
+#BME_MOSI = board.GP19
+#BME_MISO = board.GP16
+#BME_OUT = board.GP17
 
 ############################
 # Initial WiFi/Safe Mode Check
@@ -68,6 +69,7 @@ class Conf:
     def __init__(self):
         try:
             self.sensor1 = os.getenv("sensor1")
+            self.sensor1Pins = stringToArray(os.getenv("sensor1Pins"))
             temperature_offset1 = os.getenv("sensor1TemperatureOffset")
             if temperature_offset1 is not None:
                 self.sensor1TemperatureOffset = float(temperature_offset1)
@@ -75,10 +77,13 @@ class Conf:
                 print("Warning: 'sensor1TemperatureOffset' not found in settings.toml. Using default.")
         except ValueError:
             self.sensor1 = None
-            print(f"Warning: Invalid 'sensor1TemperatureOffset' '{sensor1TemperatureOffset}' in settings.toml. Using default.")
+            self.sensor2Pins = None
+            self.temperature_offset2 = 0
+            print(f"Warning: Invalid settings.toml. Using default.")
 
         try:
             self.sensor2 = os.getenv("sensor2")
+            self.sensor2Pins = stringToArray(os.getenv("sensor2Pins"))
             temperature_offset2 = os.getenv("sensor2TemperatureOffset")
             if temperature_offset2 is not None:
                 self.sensor2TemperatureOffset = float(temperature_offset2)
@@ -86,7 +91,9 @@ class Conf:
                 print("Warning: 'sensor2TemperatureOffset' not found in settings.toml. Using default.")
         except ValueError:
             self.sensor2 = None
-            print(f"Warning: Invalid 'sensor2TemperatureOffset' '{sensor2TemperatureOffset}' in settings.toml. Using default.")
+            self.sensor2Pins = None
+            self.temperature_offset2 = 0
+            print(f"Warning: Invalid settings.toml. Using default.")
 
 ############################
 # Server
@@ -377,8 +384,8 @@ class LabServer:
             return None
             
     def assembleJson(self):
-        sensData1 = self.sensors.getData(self.sensors.envSensor1, self.sensors.envSensorName1, self.sensors.temp_offset1)
-        sensData2 = self.sensors.getData(self.sensors.envSensor2, self.sensors.envSensorName2, self.sensors.temp_offset2)
+        sensData1 = self.sensors.getData(self.sensors.envSensor1, self.sensors.envSensor1Name, self.sensors.temp_offset1)
+        sensData2 = self.sensors.getData(self.sensors.envSensor2, self.sensors.envSensor2Name, self.sensors.temp_offset2)
 
         UTC = self.getUTC()
 
@@ -473,14 +480,16 @@ class Sensors:
     def __init__(self, conf):
         self.envSensor1 = None
         self.envSensor2 = None
-        self.envSensorName1 = conf.sensor1
-        self.envSensorName2 = conf.sensor2
+        self.envSensor1Name = conf.sensor1
+        self.envSensor2Name = conf.sensor2
+        self.envSensor1Pins = conf.sensor1Pins
+        self.envSensor2Pins = conf.sensor2Pins
 
         self.temp_offset1 = conf.sensor1TemperatureOffset
         self.temp_offset2 = conf.sensor2TemperatureOffset
 
-        self.envSensor1 = self.initSensor(self.envSensor1, conf.sensor1)
-        self.envSensor2 = self.initSensor(self.envSensor2, conf.sensor2)
+        self.envSensor1 = self.initSensor(conf.sensor1, conf.sensor1Pins)
+        self.envSensor2 = self.initSensor(conf.sensor2, conf.sensor2Pins)
 
         if self.envSensor1 != None:
             self.avDeltaT = microcontroller.cpu.temperature - self.envSensor1.temperature
@@ -489,20 +498,23 @@ class Sensors:
 
         self.numTimes = 1
 
-    def initSensor(self, envSensor, envSensorName):
+    def initSensor(self, envSensorName, pins):
         try:
             if envSensorName == "MCP9808":
-                envSensor = self.initMCP9808()
+                envSensor = self.initMCP9808(pins)
             if envSensorName == "BME280":
-                envSensor = self.initBME280()
+                envSensor = self.initBME280(pins)
             if envSensorName == "BME680":
-                envSensor = self.initBME680()
+                envSensor = self.initBME680(pins)
             print(f"Temperature sensor ({envSensorName}) found and initialized.")
             return envSensor
         except Exception as e:
             print(f"Failed to initialize enironmental sensor: {e}")
 
-    def initMCP9808(self):
+    def initMCP9808(self, pins):
+        import adafruit_mcp9808
+        MCP_I2C_SCL = getattr(board, "GP" + str(pins[0]))
+        MCP_I2C_SDA = getattr(board, "GP" + str(pins[1]))
         i2c = busio.I2C(MCP_I2C_SCL, MCP_I2C_SDA)
         envSensor = adafruit_mcp9808.MCP9808(i2c)
         return envSensor
@@ -510,7 +522,12 @@ class Sensors:
     def getEnvDataMCP9808(self, envSensor):
         return {'temperature': str(envSensor.temperature), 'RH': '--', 'pressure': '--'}
 
-    def initBME280(self):
+    def initBME280(self, pins):
+        from adafruit_bme280 import basic as adafruit_bme280
+        BME_CLK = getattr(board, "GP" + str(pins[0]))
+        BME_MOSI = getattr(board, "GP" + str(pins[1]))
+        BME_MISO = getattr(board, "GP" + str(pins[2]))
+        BME_OUT = getattr(board, "GP" + str(pins[3]))
         spi = busio.SPI(BME_CLK, MISO=BME_MISO, MOSI=BME_MOSI)
         bme_cs = digitalio.DigitalInOut(BME_OUT)
         envSensor = adafruit_bme280.Adafruit_BME280_SPI(spi, bme_cs)
@@ -519,12 +536,17 @@ class Sensors:
     def getEnvDataBME280(self, envSensor):
         return {'temperature': str(envSensor.temperature), 'RH': str(envSensor.relative_humidity), 'pressure': str(envSensor.pressure)}
 
-    def initBME680(self):
+    def initBME680(self, pins):
+        import adafruit_bme680
+        BME_CLK = getattr(board, "GP" + str(pins[0]))
+        BME_MOSI = getattr(board, "GP" + str(pins[1]))
+        BME_MISO = getattr(board, "GP" + str(pins[2]))
+        BME_OUT = getattr(board, "GP" + str(pins[3]))
         spi = busio.SPI(BME_CLK, MISO=BME_MISO, MOSI=BME_MOSI)
         bme_cs = digitalio.DigitalInOut(BME_OUT)
         envSensor = adafruit_bme680.Adafruit_BME680_SPI(spi, bme_cs)
         return envSensor
-
+        
     def getEnvDataBME680(self, envSensor):
         return {'temperature': str(envSensor.temperature), 'RH': str(envSensor.humidity), 'pressure': str(envSensor.pressure)}
 
@@ -568,6 +590,21 @@ class Sensors:
         elif envSensorName == "BME680":
             sensorData = self.getEnvDataBME680(envSensor)
         return sensorData
+        
+############################
+# Utilities
+############################
+def stringToArray(string):
+    if string is not None:
+        number_strings = (
+        string.replace(" ", "")
+            .split(',')
+        )
+        array = [int(p) for p in number_strings]
+        return array
+    else:
+        print("Warning: Initial string-array not found in settings.toml")
+        return []
 
 ############################
 # Main
