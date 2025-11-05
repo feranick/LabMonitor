@@ -291,7 +291,7 @@ class LabServer:
             
     def assembleJson(self):
         sensData1 = self.sensors.getData(self.sensors.envSensor1, self.sensors.envSensor1Name, self.sensors.sensor1CorrectTemp)
-        sensData2 = self.sensors.getData(self.sensors.envSensor2, self.sensors.envSensor2Name, self.sensors.sensor1CorrectTemp)
+        sensData2 = self.sensors.getData(self.sensors.envSensor2, self.sensors.envSensor2Name, self.sensors.sensor2CorrectTemp)
 
         UTC = self.getUTC()
 
