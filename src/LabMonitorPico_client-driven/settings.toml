@@ -9,9 +9,19 @@ sensor1CorrectTemp = "True"
 sensor2 = "MCP9808"
 sensor2Pins = "15,14"
 sensor2CorrectTemp = "False"
+sensor3 = "MAX31865"
+sensor3Pins = "6,7,8,9"
+sensor3CorrectTemp = "False"
 submitToMongo = "False"
 mongoURL = "https://www.site.com"
 mongoSecretKey = "very_long_key"
 certPath = "/static/cert/cert.pem"
 deviceName = "EnvironmentalChamber"
 isPicoSubmitMongo = "False"
+
+# Pins format for SPI:
+# SCK, MOSI, MISO, OUT
+# CLK, SDI, SDO, CS
+
+# Pins format for I2C:
+# SCL, SDA

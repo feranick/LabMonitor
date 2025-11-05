@@ -1,11 +1,11 @@
 # **********************************************
 # * LabMonitor - Rasperry Pico W
 # * Client driven
-# * v2025.11.5.1
+# * v2025.11.5.2
 # * By: Nicola Ferralis <feranick@hotmail.com>
 # **********************************************
 
-version = "2025.11.5.1-client-driven"
+version = "2025.11.5.2-client-driven"
 
 import wifi
 import time
@@ -70,6 +70,16 @@ class Conf:
             self.sensor2 = None
             self.sensor2Pins = None
             self.sensor2CorrectTemp = "False"
+            print(f"Warning: Invalid settings.toml. Using default.")
+            
+        try:
+            self.sensor3 = os.getenv("sensor3")
+            self.sensor3Pins = stringToArray(os.getenv("sensor3Pins"))
+            self.sensor3CorrectTemp = os.getenv("sensor3CorrectTemp")
+        except ValueError:
+            self.sensor3 = None
+            self.sensor3Pins = None
+            self.sensor3CorrectTemp = "False"
             print(f"Warning: Invalid settings.toml. Using default.")
 
 ############################
@@ -292,6 +302,7 @@ class LabServer:
     def assembleJson(self):
         sensData1 = self.sensors.getData(self.sensors.envSensor1, self.sensors.envSensor1Name, self.sensors.sensor1CorrectTemp)
         sensData2 = self.sensors.getData(self.sensors.envSensor2, self.sensors.envSensor2Name, self.sensors.sensor2CorrectTemp)
+        sensData3 = self.sensors.getData(self.sensors.envSensor3, self.sensors.envSensor3Name, self.sensors.sensor3CorrectTemp)
 
         UTC = self.getUTC()
 
@@ -304,6 +315,10 @@ class LabServer:
             "sens2_RH": sensData2['RH'],
             "sens2_P": sensData2['pressure'],
             "sens2_type": sensData2['type'],
+            "sens3_Temp": sensData3['temperature'],
+            "sens3_RH": sensData3['RH'],
+            "sens3_P": sensData3['pressure'],
+            "sens3_type": sensData3['type'],
             "ip": self.ip,
             "version": version,
             "UTC": UTC,
@@ -386,15 +401,20 @@ class Sensors:
         self.sensDev = SensorDevices()
         self.envSensor1 = None
         self.envSensor2 = None
+        self.envSensor3 = None
         self.envSensor1Name = conf.sensor1
         self.envSensor2Name = conf.sensor2
+        self.envSensor3Name = conf.sensor3
         self.envSensor1Pins = conf.sensor1Pins
         self.envSensor2Pins = conf.sensor2Pins
+        self.envSensor3Pins = conf.sensor3Pins
         self.sensor1CorrectTemp = conf.sensor1CorrectTemp
         self.sensor2CorrectTemp = conf.sensor2CorrectTemp
-
+        self.sensor3CorrectTemp = conf.sensor3CorrectTemp
+        
         self.envSensor1 = self.sensDev.initSensor(conf.sensor1, conf.sensor1Pins)
         self.envSensor2 = self.sensDev.initSensor(conf.sensor2, conf.sensor2Pins)
+        self.envSensor3 = self.sensDev.initSensor(conf.sensor3, conf.sensor3Pins)
 
         if self.envSensor1 != None:
             self.avDeltaT = microcontroller.cpu.temperature - self.envSensor1.temperature

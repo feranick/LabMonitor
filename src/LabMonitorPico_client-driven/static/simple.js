@@ -59,6 +59,9 @@ async function updateStatus(flag) {
 
     document.getElementById("sens2_Temp").textContent = data.sens2_Temp + " \u00B0C";
     document.getElementById("sens2_Temp").style.color = "#00008B";
+    document.getElementById("sens3_Temp").textContent = data.sens3_Temp + " \u00B0C";
+    document.getElementById("sens3_Temp").style.color = "#00008B";
+    
     //document.getElementById("sens2_RH").textContent = data.sens2_RH + " %";
     if (data.sens1_type != "sensor") {
         document.getElementById("sens1_Temp").style.color = "red";
@@ -66,6 +69,10 @@ async function updateStatus(flag) {
         
     if (data.sens2_type != "sensor") {
         document.getElementById("sens2_Temp").style.color = "red";
+        }
+        
+    if (data.sens2_type != "sensor") {
+        document.getElementById("sens3_Temp").style.color = "red";
         }
 
     document.getElementById("datetime").textContent = datetime;
