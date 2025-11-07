@@ -1,8 +1,10 @@
 # **********************************************
 # * libSensors - Rasperry Pico W
-# * v2025.11.7.2
+# * v2025.11.7.3
 # * By: Nicola Ferralis <feranick@hotmail.com>
 # **********************************************
+
+version = "2025.11.7.3"
 
 import time
 import busio
@@ -34,7 +36,10 @@ class SensorDevices:
             return envSensor
         except Exception as e:
             print(f"Failed to initialize enironmental sensor ({envSensorName}): {e}")
-
+            
+    ##############################################
+    # Sensors: Initialization and Data collection
+    ##############################################
     def initMCP9808(self, pins):
         import adafruit_mcp9808
         MCP_I2C_SCL = getattr(board, "GP" + str(pins[0]))
@@ -47,11 +52,14 @@ class SensorDevices:
         t_envSensor = float(envSensor.temperature)
         if correctTemp.lower() == 'true':
             t_envSensor = self.correctTempMCP9808(t_envSensor)
-        return {'temperature': f"{round(t_envSensor,1)}", 'RH': "--", 'pressure': "--", 'gas': '--', 'type': 'sensor'}
+        return {'temperature': f"{round(t_envSensor,1)}",
+                'RH': "--",
+                'pressure': "--",
+                'gas': '--',
+                'aqi': '--',
+                'type': 'sensor',
+                'libSensor_version': version}
         
-    ##############################################
-    # Sensors: Initialization and Data collection
-    ##############################################
     def initBME280(self, pins):
         from adafruit_bme280 import basic as adafruit_bme280
         BME_CLK = getattr(board, "GP" + str(pins[0]))
@@ -65,11 +73,17 @@ class SensorDevices:
 
     def getEnvDataBME280(self, envSensor, correctTemp):
         t_envSensor = float(envSensor.temperature)
-        rh_envSensor = round(float(envSensor.humidity),1)
+        rh_envSensor = float(envSensor.humidity)
         p_envSensor = int(float(envSensor.pressure))
         if correctTemp.lower() == 'true':
             t_envSensor = self.correctTempBME280(t_envSensor,rh_envSensor)
-        return {'temperature': f"{round(t_envSensor,1)}", 'RH': f"{rh_envSensor}", 'pressure': f"{p_envSensor}", 'gas': '--', 'type': 'sensor'}
+        return {'temperature': f"{round(t_envSensor,1)}",
+                'RH': f"{round(rh_envSensor, 1)}",
+                'pressure': f"{p_envSensor}",
+                'gas': '--',
+                'aqi': '--',
+                'type': 'sensor',
+                'libSensor_version': version}
 
     def initBME680(self, pins):
         import adafruit_bme680
@@ -84,12 +98,20 @@ class SensorDevices:
         
     def getEnvDataBME680(self, envSensor, correctTemp):
         t_envSensor = float(envSensor.temperature)
-        rh_envSensor = round(float(envSensor.humidity),1)
+        rh_envSensor = float(envSensor.humidity)
         p_envSensor = int(float(envSensor.pressure))
+        gas_envSensor = int(self.envSensor.gas)
+        
         if self.correctTemp.lower() == 'true':
-            t_envSensor = correctTempBME680(t_envSensor,rh_envSensor)
-        return {'temperature': f"{round(t_envSensor,1)}", 'RH': f"{rh_envSensor}", 'pressure': f"{p_envSensor}", 'gas': f"{self.envSensor.gas}", 'type': 'sensor'}
-        #return {'temperature': str(envSensor.temperature), 'RH': str(envSensor.humidity), 'pressure': str(envSensor.pressure)}
+            t_envSensor = self.correctTempBME680(t_envSensor,rh_envSensor)
+        aqi_envSensor = self.getAQIBME680(rh_envSensor, gas_envSensor)
+        return {'temperature': f"{round(t_envSensor,1)}",
+                'RH': f"{round(rh_envSensor,1)}",
+                'pressure': f"{p_envSensor}",
+                'gas': f"{gas_envSensor}",
+                'aqi': f"{aqi_envSensor}",
+                'type': 'sensor',
+                'libSensor_version': version}
         
     def initMAX31865(self, pins):
         import adafruit_max31865
@@ -106,16 +128,34 @@ class SensorDevices:
         t_envSensor = float(envSensor.temperature)
         if correctTemp.lower() == 'true':
             t_envSensor = self.correctTempMAX31865(t_envSensor)
-        return {'temperature': f"{round(t_envSensor,1)}", 'RH': "--", 'pressure': "--", 'gas': '--', 'type': 'sensor'}
+        return {'temperature': f"{round(t_envSensor,1)}",
+                'RH': "--",
+                'pressure': "--",
+                'gas': '--',
+                'aqi': '--',
+                'type': 'sensor',
+                'libSensor_version': version}
 
     def getData(self, envSensor, envSensorName, correctTemp):
         t_cpu = microcontroller.cpu.temperature
         if not envSensor:
             print(f"{envSensorName} not initialized. Using CPU temp with estimated offset.")
             if self.numTimes > 1 and self.avDeltaT != 0 :
-                return {'temperature': f"{round(t_cpu - self.avDeltaT, 1)}", 'RH': '--', 'pressure': '--', 'type': 'CPU adj.'}
+                return {'temperature': f"{round(t_cpu - self.avDeltaT, 1)}",
+                        'RH': '--',
+                        'pressure': '--',
+                        'gas': '--',
+                        'aqi': '--',
+                        'type': 'CPU adj.',
+                        'libSensor_version': version}
             else:
-                return {'temperature': f"{round(t_cpu, 1)} ", 'RH': '--', 'pressure': '--', 'type': 'CPU raw'}
+                return {'temperature': f"{round(t_cpu, 1)} ",
+                        'RH': '--',
+                        'pressure': '--',
+                        'gas': '--',
+                        'aqi': '--',
+                        'type': 'CPU raw',
+                        'libSensor_version': version}
         try:
             envSensorData = self.getSensorData(envSensor, envSensorName, correctTemp)
             delta_t = t_cpu - float(envSensorData['temperature'])
@@ -130,7 +170,13 @@ class SensorDevices:
         except:
             print(f"{envSensorName} not available. Av CPU/MCP T diff: {self.avDeltaT}")
             time.sleep(0.5)
-            return {'temperature': f"{round(t_cpu-self.avDeltaT, 1)}", 'RH': '--', 'pressure': '--', 'type': 'CPU adj'}
+            return {'temperature': f"{round(t_cpu-self.avDeltaT, 1)}",
+                    'RH': '--',
+                    'pressure': '--',
+                    'gas': '--',
+                    'aqi': '--',
+                    'type': 'CPU adj',
+                    'libSensor_version': version}
 
     def getSensorData(self, envSensor, envSensorName, correctTemp):
         if envSensorName == "MCP9808":
@@ -203,6 +249,5 @@ class SensorDevices:
         SG = SG_max * ((math.log10(R_gas)-math.log10(R_min))/(math.log10(R_max)-math.log10(R_min)))
         SH = SH_max = 80 * (1 - (abs(RH - SH_opt))/SH_range)
         AQI = SG + SH
-        
         return AQI
         
