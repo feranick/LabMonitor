@@ -1,3 +1,9 @@
+# **********************************************
+# * LabMonitor - Backend pymongo/flask
+# * v2025.11.7.3
+# * By: Nicola Ferralis <feranick@hotmail.com>
+# **********************************************
+
 import os
 import sys
 import json
@@ -204,7 +210,9 @@ def get_data():
                 "sens3_type": doc.get("sens3_type"),
                 "device_name": doc.get("device_name"),
                 "user_comment": doc.get("user_comment", ""),
-                "UTC": doc.get("UTC")
+                "UTC": doc.get("UTC"),
+                "version": doc.get("version"),
+                "libSensors_version": doc.get("libSensors_version")
             })
             
         print(f"[INFO] Fetched {len(results)} documents for date range.")
