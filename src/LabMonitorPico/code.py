@@ -1,11 +1,11 @@
 # **********************************************
 # * LabMonitor - Rasperry Pico W
 # * Pico driven
-# * v2025.11.5.2
+# * v2025.11.7.1
 # * By: Nicola Ferralis <feranick@hotmail.com>
 # **********************************************
 
-version = "2025.11.5.2-pico-driven"
+version = "2025.11.7.1-pico-driven"
 
 import wifi
 import time
