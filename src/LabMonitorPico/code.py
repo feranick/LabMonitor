@@ -396,6 +396,7 @@ class LabServer:
             "sens3_type": sensData3['type'],
             "ip": self.ip,
             "version": version,
+            "libSensors_version": sensData3['libSensors_version'],
             "UTC": UTC,
             "mongoURL": self.mongoURL,
             "mongoSecretKey" : self.mongoSecretKey,
