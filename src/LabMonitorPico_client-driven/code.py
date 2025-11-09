@@ -1,11 +1,11 @@
 # **********************************************
 # * LabMonitor - Rasperry Pico W
 # * Client driven
-# * v2025.11.7.3
+# * v2025.11.8.1
 # * By: Nicola Ferralis <feranick@hotmail.com>
 # **********************************************
 
-version = "2025.11.7.3-client-driven"
+version = "2025.11.8.1-client-driven"
 
 import wifi
 import time
@@ -321,7 +321,7 @@ class LabServer:
             "sens3_type": sensData3['type'],
             "ip": self.ip,
             "version": version,
-            "libSensors_version": sensData1['libSensors_version'],
+            "libSensors_version": self.sensors.sensDev.version,
             "UTC": UTC,
             "mongoURL": self.mongoURL,
             "mongoSecretKey" : self.mongoSecretKey,
