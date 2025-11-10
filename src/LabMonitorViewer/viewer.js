@@ -1,4 +1,4 @@
-let version = "2025.11.5.2";
+let version = "2025.11.10.1";
 let sensorChart;
 let hoveredDataIndex = -1;
 let nameSelIndex="LabMonitorViewer_device_dropdown";
@@ -152,6 +152,7 @@ async function fetchAndDisplayData() {
             chartDataStore.isoLabels.push(point.datetime_utc_pico);
             chartDataStore.sens1_Temp.push(parseFloat(point.sens1_Temp) || null);
             chartDataStore.sens1_RH.push(parseFloat(point.sens1_RH) || null);
+            chartDataStore.sens1_HI.push(parseFloat(point.sens1_HI) || null);
             chartDataStore.sens1_WBT.push(parseFloat(s1_WBT_string) || null);
             chartDataStore.sens2_Temp.push(parseFloat(point.sens2_Temp) || null);
             chartDataStore.sens2_RH.push(parseFloat(point.sens2_RH) || null);
@@ -266,6 +267,7 @@ function clearPlot() {
     chartDataStore.isoLabels = [];
     chartDataStore.sens1_Temp = [];
     chartDataStore.sens1_RH = [];
+    chartDataStore.sens1_HI = [];
     chartDataStore.sens1_WBT = [];
     chartDataStore.sens2_Temp = [];
     chartDataStore.sens2_RH = [];
@@ -306,7 +308,8 @@ function exportToCsv() {
             chartDataStore.isoLabels[i],
             chartDataStore.sens1_Temp[i],
             chartDataStore.sens1_RH[i],
-            chartDataStore.sens1_WBT[i], 
+            chartDataStore.sens1_HI[i],
+            chartDataStore.sens1_WBT[i],
             chartDataStore.sens2_Temp[i],
             chartDataStore.sens2_RH[i],
             chartDataStore.sens3_Temp[i],
@@ -461,6 +464,7 @@ const FixedInfoPlugin = {
         const index = hoveredDataIndex;
         const timeLabel = chartDataStore.labels[index]?.toLocaleTimeString() || "N/A";
         const temp1 = chartDataStore.sens1_Temp[index];
+        const HI1 = chartDataStore.sens1_HI[index];
         const wbt1 = chartDataStore.sens1_WBT[index];
         const rh1 = chartDataStore.sens1_RH[index];
         const temp2 = chartDataStore.sens2_Temp[index];
