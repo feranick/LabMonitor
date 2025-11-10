@@ -10,6 +10,7 @@ const chartDataStore = {
     isoLabels: [],    // Array of ISO strings (for CSV)
     sens1_Temp: [],
     sens1_RH: [],
+    sens1_HI: [],
     sens1_WBT: [],
     sens2_Temp: [],
     sens2_RH: [],
@@ -175,6 +176,7 @@ async function updatePlot(flag) {
     const datetime = getCurrentDateTimeUTC(data.UTC);
     const s1_Temp = parseFloat(data.sens1_Temp) || null;
     const s1_RH = parseFloat(data.sens1_RH) || null;
+    const s1_HI = parseFloat(data.sens1_HI) || null;
     const s2_Temp = parseFloat(data.sens2_Temp) || null;
     const s2_RH = parseFloat(data.sens2_RH) || null;
     const s3_Temp = parseFloat(data.sens3_Temp) || null;
@@ -196,6 +198,8 @@ async function updatePlot(flag) {
     document.getElementById("datetime_current").textContent = datetime;
     document.getElementById("sens1_Temp_current").textContent = data.sens1_Temp + " \u00B0C";
     document.getElementById("sens1_Temp_current").style.color = "#00008B";
+    document.getElementById("sens1_HI_current").textContent = data.sens1_HI + " \u00B0C";
+    document.getElementById("sens1_HI_current").style.color = "#00008B";
     document.getElementById("sens1_RH_current").textContent = data.sens1_RH + "%";
     document.getElementById("sens1_WBT_current").textContent = s1_WBT_string + " \u00B0C"; 
     document.getElementById("sens2_Temp_current").textContent = data.sens2_Temp + " \u00B0C";
@@ -221,6 +225,7 @@ async function updatePlot(flag) {
     chartDataStore.isoLabels.push(timestamp.toISOString());
     chartDataStore.sens1_Temp.push(s1_Temp);
     chartDataStore.sens1_RH.push(s1_RH);
+    chartDataStore.sens1_HI.push(s1_HI);
     chartDataStore.sens1_WBT.push(s1_WBT);
     chartDataStore.sens2_Temp.push(s2_Temp);
     chartDataStore.sens2_RH.push(s2_RH);
@@ -235,6 +240,7 @@ async function updatePlot(flag) {
         const key = dataset.label;
         if (key === 'sens1_Temp') dataset.data.push(s1_Temp);
         if (key === 'sens1_RH') dataset.data.push(s1_RH);
+        if (key === 'sens1_HI') dataset.data.push(s1_RH);
         if (key === 'sens1_WBT') dataset.data.push(s1_WBT);
         if (key === 'sens2_Temp') dataset.data.push(s2_Temp);
         if (key === 'sens2_RH') dataset.data.push(s2_RH);
@@ -318,6 +324,7 @@ function clearPlot() {
     chartDataStore.isoLabels = [];
     chartDataStore.sens1_Temp = [];
     chartDataStore.sens1_RH = [];
+    chartDataStore.sens1_HI = [];
     chartDataStore.sens1_WBT = [];
     chartDataStore.sens2_Temp = [];
     chartDataStore.sens2_RH = [];
@@ -355,7 +362,7 @@ function exportToPng() {
 }
 
 function exportToCsv() {
-    const headers = ['timestamp', 'sens1_Temp', 'sens1_RH', 'sens1_WBT', 'sens2_Temp', 'sens2_RH'];
+    const headers = ['timestamp', 'sens1_Temp', 'sens1_RH', 'sens1_HI', 'sens1_WBT', 'sens2_Temp', 'sens2_RH'];
     let csvContent = "data:text/csv;charset=utf-8," + headers.join(',') + "\n";
 
     for (let i = 0; i < chartDataStore.isoLabels.length; i++) {
@@ -363,7 +370,8 @@ function exportToCsv() {
             chartDataStore.isoLabels[i],
             chartDataStore.sens1_Temp[i],
             chartDataStore.sens1_RH[i],
-            chartDataStore.sens1_WBT[i], 
+            chartDataStore.sens1_HI[i],
+            chartDataStore.sens1_WBT[i],
             chartDataStore.sens2_Temp[i],
             chartDataStore.sens2_RH[i],
             chartDataStore.sens3_Temp[i],
@@ -583,6 +591,7 @@ const FixedInfoPlugin = {
         const index = hoveredDataIndex;
         const timeLabel = chartDataStore.labels[index]?.toLocaleTimeString() || "N/A";
         const temp1 = chartDataStore.sens1_Temp[index];
+        const HI1 = chartDataStore.sens1_HI[index];
         const wbt1 = chartDataStore.sens1_WBT[index];
         const rh1 = chartDataStore.sens1_RH[index];
         const temp2 = chartDataStore.sens2_Temp[index];

@@ -1,6 +1,6 @@
 # **********************************************
 # * LabMonitor - Backend pymongo/flask
-# * v2025.11.7.3
+# * v2025.11.10.1
 # * By: Nicola Ferralis <feranick@hotmail.com>
 # **********************************************
 
@@ -199,6 +199,7 @@ def get_data():
                 "sens1_Temp": doc.get("sens1_Temp"),
                 "sens1_RH": doc.get("sens1_RH"),
                 "sens1_P": doc.get("sens1_P"),
+                "sens1_HI": doc.get("sens1_HI"),
                 "sens1_type": doc.get("sens1_type"),
                 "sens2_Temp": doc.get("sens2_Temp"),
                 "sens2_RH": doc.get("sens2_RH"),

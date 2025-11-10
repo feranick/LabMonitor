@@ -1,11 +1,11 @@
 # **********************************************
 # * LabMonitor - Rasperry Pico W
 # * Client driven
-# * v2025.11.8.1
+# * v2025.11.10.1
 # * By: Nicola Ferralis <feranick@hotmail.com>
 # **********************************************
 
-version = "2025.11.8.1-client-driven"
+version = "2025.11.10.1-client-driven"
 
 import wifi
 import time
@@ -310,14 +310,17 @@ class LabServer:
             "sens1_Temp": sensData1['temperature'],
             "sens1_RH": sensData1['RH'],
             "sens1_P": sensData1['pressure'],
+            "sens1_HI": sensData1['HI'],
             "sens1_type": sensData1['type'],
             "sens2_Temp": sensData2['temperature'],
             "sens2_RH": sensData2['RH'],
             "sens2_P": sensData2['pressure'],
+            "sens2_HI": sensData2['HI'],
             "sens2_type": sensData2['type'],
             "sens3_Temp": sensData3['temperature'],
             "sens3_RH": sensData3['RH'],
             "sens3_P": sensData3['pressure'],
+            "sens3_HI": sensData3['HI'],
             "sens3_type": sensData3['type'],
             "ip": self.ip,
             "version": version,
