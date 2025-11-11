@@ -463,6 +463,7 @@ const FixedInfoPlugin = {
         // --- Get Data for the Hovered Index ---
         const index = hoveredDataIndex;
         const timeLabel = chartDataStore.labels[index]?.toLocaleTimeString() || "N/A";
+        const dateLabel = chartDataStore.labels[index]?.toLocaleDateString() || "N/A";
         const temp1 = chartDataStore.sens1_Temp[index];
         const HI1 = chartDataStore.sens1_HI[index];
         const wbt1 = chartDataStore.sens1_WBT[index];
@@ -473,12 +474,13 @@ const FixedInfoPlugin = {
 
         // --- Prepare Text Lines ---
         let lines = [
+            `Date: ${dateLabel}`,
             `Time: ${timeLabel}`,
-            `S1 Temp: ${temp1 !== null ? temp1 + ' °C' : '--'}`,
-            `S1 WBT: ${wbt1 !== null ? wbt1 + ' °C' : '--'}`,
+            `S1 Temp: ${temp1 !== null ? temp1 + ' \u00B0C' : '--'}`,
+            `S1 WBT: ${wbt1 !== null ? wbt1 + ' \u00B0C' : '--'}`,
             `S1 RH: ${rh1 !== null ? rh1 + ' %' : '--'}`,
-            `S2 Temp: ${temp2 !== null ? temp2 + ' °C' : '--'}`,
-            `S3 Temp: ${temp3 !== null ? temp3 + ' °C' : '--'}`,
+            `S2 Temp: ${temp2 !== null ? temp2 + ' \u00B0C' : '--'}`,
+            `S3 Temp: ${temp3 !== null ? temp3 + ' \u00B0C' : '--'}`,
         ];
         
         // Add comment only if it exists and isn't the default placeholder
@@ -488,8 +490,8 @@ const FixedInfoPlugin = {
 
         // --- Draw the Box ---
         const lineHeight = 18;
-        const padding = 10;
-        const boxWidth = 250;
+        const padding = 5;
+        const boxWidth = 150;
         const boxHeight = (lines.length * lineHeight) + (padding * 2);
         
         // Position the box in the bottom-left corner
