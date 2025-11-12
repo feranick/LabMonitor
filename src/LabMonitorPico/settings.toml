@@ -22,6 +22,7 @@ isPicoSubmitMongo = "True"
 # Pins format for SPI:
 # SCK, MOSI, MISO, OUT
 # CLK, SDI, SDO, CS
+# CLK, SDA, SDO, CS
 
 # Pins format for I2C:
 # SCL, SDA
