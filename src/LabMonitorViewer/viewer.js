@@ -1,4 +1,4 @@
-let version = "2025.11.10.1";
+let version = "2025.11.14.1";
 let sensorChart;
 let hoveredDataIndex = -1;
 let nameSelIndex="LabMonitorViewer_device_dropdown";
@@ -416,10 +416,10 @@ document.addEventListener('DOMContentLoaded', () => {
     
     fetchDataBtn.addEventListener('click', (event) => {
         if (event.shiftKey || event.metaKey) {
-            console.log('Use end date/times as displayed');
-        } else {
             console.log('Use the current date/time as endDate');
             setCurrentEndDateTime();
+        } else {
+            console.log('Use end date/times as displayed');
         }
         fetchAndDisplayData();
     });
