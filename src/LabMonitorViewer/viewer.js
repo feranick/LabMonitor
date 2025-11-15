@@ -1,4 +1,4 @@
-let version = "2025.11.14.1";
+let version = "2025.11.15.1";
 let sensorChart;
 let hoveredDataIndex = -1;
 let nameSelIndex="LabMonitorViewer_device_dropdown";
@@ -410,19 +410,55 @@ document.addEventListener('DOMContentLoaded', () => {
     // Initialize the Zoom button text and state
     toggleZoomMode();
 
-
-    // --- Add Event Listeners ---
-    //fetchDataBtn.addEventListener('click', fetchAndDisplayData);
+    // Handle long presses
+    const LONG_PRESS_TIME = 500; // 0.5 seconds
+    let pressTimer;
+    let isLongPress = false;
     
-    fetchDataBtn.addEventListener('click', (event) => {
-        if (event.shiftKey || event.metaKey) {
-            console.log('Use the current date/time as endDate');
-            setCurrentEndDateTime();
-        } else {
-            console.log('Use end date/times as displayed');
+    // === Function called on button press start ===
+    function startPress() {
+        isLongPress = false;
+        pressTimer = setTimeout(() => {
+            // 1. Long Press Option (After 500ms)
+            isLongPress = true;
+            console.log('Use end date/times as displayed (Long Click)');
+            fetchAndDisplayData(); // Call this to fetch data on long press
+            clearTimeout(pressTimer);
+        }, LONG_PRESS_TIME);
+    }
+
+    // === Function called on button press end ===
+    function endPress(event) {
+        clearTimeout(pressTimer);
+
+        if (!isLongPress) {
+            // This runs ONLY if it was a SHORT click
+            if (event.shiftKey || event.metaKey) {
+                // 2. Shift/Meta Key Option (Short Click + Modifier)
+                console.log('Use the current date/time as endDate (Shift/Meta)');
+            } else {
+                // 2. Regular short click
+                console.log('Use end date/times as displayed (Normal Click)');
+                setCurrentEndDateTime();
+            }
+            fetchAndDisplayData(); // Call this to fetch data on short click
         }
-        fetchAndDisplayData();
+        isLongPress = false;
+    }
+    
+    fetchDataBtn.addEventListener('mousedown', startPress);
+    fetchDataBtn.addEventListener('mouseup', endPress);
+    fetchDataBtn.addEventListener('mouseout', (event) => {
+        // Handle dragging mouse off button
+        if (pressTimer) {
+            clearTimeout(pressTimer);
+            isLongPress = false;
+        }
     });
+    // Mobile-specific touch events
+    fetchDataBtn.addEventListener('touchstart', startPress);
+    fetchDataBtn.addEventListener('touchend', endPress);
+    fetchDataBtn.addEventListener('touchcancel', endPress);
     
     clearBtn.addEventListener('click', clearPlot);
     pngBtn.addEventListener('click', exportToPng);
