@@ -1,3 +1,12 @@
+# **********************************************
+# * LabMonitor - settings.toml Editor
+# * Pico driven
+# * v2025.11.17.1
+# * By: Nicola Ferralis <feranick@hotmail.com>
+# **********************************************
+
+version = "2025.11.17.1"
+
 import tkinter as tk
 from tkinter import messagebox, filedialog
 import os
@@ -57,12 +66,12 @@ DEFAULT_SETTINGS = {
 class ConfigApp(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title("LabMonitor settings.toml Editor")
-        self.geometry("600x1000")
+        self.title("LabMonitor settings.toml Editor v."+version)
+        self.geometry("650x1050")
         
         self.circuitpy_path = tk.StringVar(self, value="<Select CIRCUITPY Drive Path>")
         self.entries = {}
-        self.font_style = ('Helvetica', 10)
+        self.font_style = ('Helvetica', 14)
         
         self.create_widgets()
         self.auto_detect_circuitpy()
@@ -153,7 +162,7 @@ class ConfigApp(tk.Tk):
         
         for section, defaults in DEFAULT_SETTINGS.items():
             # Section Header
-            tk.Label(scrollable_frame, text=f"[{section}]", font=('Helvetica', 12, 'bold'), fg="#1a5a9c").grid(
+            tk.Label(scrollable_frame, text=f"[{section}]", font=('Helvetica', 14, 'bold'), fg="#1a5a9c").grid(
                 row=row_idx, column=0, columnspan=2, sticky="w", pady=(15, 5), padx=5)
             row_idx += 1
             
@@ -208,7 +217,7 @@ class ConfigApp(tk.Tk):
                                              "CLK, SDI, SDO, CS\n" + \
                                              "CLK, SDA, SDO, CS\n",
                                              fg="gray60",
-                                             font=('Helvetica', 9, 'italic'),
+                                             font=('Helvetica', 12, 'italic'),
                                              justify='left')
         footer_label_left.grid(row=0, column=0, sticky="w", padx=10, pady=(0, 5))
 
@@ -216,7 +225,7 @@ class ConfigApp(tk.Tk):
         footer_label_right = tk.Label(path_footer, text="Pins format for I2C\n"+ \
                                             "SCL, SDA.",
                                              fg="gray60",
-                                             font=('Helvetica', 9, 'italic'),
+                                             font=('Helvetica', 12, 'italic'),
                                              justify='left')
         footer_label_right.grid(row=0, column=1, sticky="w", padx=10, pady=(0, 5))
         
@@ -379,8 +388,8 @@ class ConfigApp(tk.Tk):
         # 2. Open file dialog to choose save location
         toml_path = filedialog.asksaveasfilename(
             defaultextension=".toml",
-            initialfile=CONFIG_FILENAME,
-            title="Save Configuration File",
+            initialfile=os.path.splitext(CONFIG_FILENAME)[0],
+            title="Save TOML Configuration File",
             filetypes=[("TOML files", "*.toml"), ("All files", "*.*")]
         )
         
