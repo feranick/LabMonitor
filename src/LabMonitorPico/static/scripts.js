@@ -173,7 +173,7 @@ async function fetchPicoStatus(flag) {
 //////////////////////////////////////////////
 async function sendControlCommand(command, interval = 30) {
     try {
-        // Fetch current data to get necessary URL keys (like mongoURL)
+        // Fetch current data to get necessary URL keys (like mongo_url)
         const currentData = await fetchPicoStatus(false);
         if (!currentData || !currentData.ip) {
              console.error('Could not get Pico IP/URL for control command.');
@@ -580,7 +580,7 @@ function resetZoom() {
 function cleanAndAugmentData(data) {
     const cleanData = { ...data };
     
-    const EXCLUDED_KEYS = ["mongoURL"];
+    const EXCLUDED_KEYS = ["mongo_url"];
     EXCLUDED_KEYS.forEach(key => {
         delete cleanData[key];
     });
@@ -603,7 +603,7 @@ async function submitData(data) {
     const cleanData = cleanAndAugmentData(data);
     console.log(cleanData);
     const FLASK_API_PATH = "/LabMonitorDB/api/submit-sensor-data";
-    const SERVER_BASE_URL = data.mongoURL;
+    const SERVER_BASE_URL = data.mongo_url;
     const FULL_ENDPOINT_URL = SERVER_BASE_URL + FLASK_API_PATH;
             
     console.log(`Submitting data to ${FULL_ENDPOINT_URL}...`);

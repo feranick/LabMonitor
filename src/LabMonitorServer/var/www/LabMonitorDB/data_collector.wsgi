@@ -1,6 +1,6 @@
 # **********************************************
 # * LabMonitor - Backend pymongo/flask
-# * v2025.11.10.1
+# * v2025.11.17.1
 # * By: Nicola Ferralis <feranick@hotmail.com>
 # **********************************************
 
@@ -96,7 +96,7 @@ def submit_sensor_data():
             return jsonify({"message": "Missing JSON in request"}), 400
             
         data = request.get_json()
-        submitted_key = data.get('mongoSecretKey')
+        submitted_key = data.get('mongo_secret_key')
         
         # NOTE: Authentication logic assumes SERVER_SECRET_KEY is loaded successfully
         if not submitted_key or submitted_key != SERVER_SECRET_KEY:

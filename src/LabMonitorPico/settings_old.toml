@@ -1,0 +1,28 @@
+CIRCUITPY_WIFI_SSID = "ssid_name"
+CIRCUITPY_WIFI_PASSWORD = "password"
+CIRCUITPY_WEB_INSTANCE_NAME = "LabMonitor"
+CIRCUITPY_WEB_API_PASSWORD="passw0rd"
+CIRCUITPY_WEB_API_PORT=205
+sensor1 = "BME280"
+sensor1Pins = "10,11,8,9"
+sensor1CorrectTemp = "True"
+sensor2 = "MAX31865"
+sensor2Pins = "18,19,16,17"
+sensor2CorrectTemp = "False"
+sensor3 = "MCP9808"
+sensor3Pins = "15,14"
+sensor3CorrectTemp = "False"
+mongoURL = "https://www.site.com"
+mongoSecretKey = "very_long_key"
+certPath = "/static/cert/cert.pem"
+deviceName = "EnvironmentalChamber"
+isPicoSubmitMongo = "True"
+
+
+# Pins format for SPI:
+# SCK, MOSI, MISO, OUT
+# CLK, SDI, SDO, CS
+# CLK, SDA, SDO, CS
+
+# Pins format for I2C:
+# SCL, SDA

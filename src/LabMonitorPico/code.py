@@ -1,11 +1,11 @@
 # **********************************************
 # * LabMonitor - Rasperry Pico W
 # * Pico driven
-# * v2025.11.13.1
+# * v2025.11.17.1
 # * By: Nicola Ferralis <feranick@hotmail.com>
 # **********************************************
 
-version = "2025.11.13.1"
+version = "2025.11.17.1"
 
 import wifi
 import time
@@ -57,33 +57,33 @@ if supervisor.runtime.safe_mode_reason is not None:
 class Conf:
     def __init__(self):
         try:
-            self.sensor1 = os.getenv("sensor1")
-            self.sensor1Pins = stringToArray(os.getenv("sensor1Pins"))
-            self.sensor1CorrectTemp = os.getenv("sensor1CorrectTemp")
+            self.sensor1_name = os.getenv("sensor1_name")
+            self.sensor1_pins = stringToArray(os.getenv("sensor1_pins"))
+            self.sensor1_correct_temp = os.getenv("sensor1_correct_temp")
         except ValueError:
-            self.sensor1 = None
-            self.sensor1Pins = None
-            self.sensor1CorrectTemp = "False"
+            self.sensor1_name = None
+            self.sensor1_pins = None
+            self.sensor1_correct_temp = "False"
             print(f"Warning: Invalid settings.toml. Using default.")
 
         try:
-            self.sensor2 = os.getenv("sensor2")
-            self.sensor2Pins = stringToArray(os.getenv("sensor2Pins"))
-            self.sensor2CorrectTemp = os.getenv("sensor2CorrectTemp")
+            self.sensor2_name = os.getenv("sensor2_name")
+            self.sensor2_pins = stringToArray(os.getenv("sensor2_pins"))
+            self.sensor2_correct_temp = os.getenv("sensor2_correct_temp")
         except ValueError:
-            self.sensor2 = None
-            self.sensor2Pins = None
-            self.sensor2CorrectTemp = "False"
+            self.sensor2_name = None
+            self.sensor2_pins = None
+            self.sensor2_correct_temp = "False"
             print(f"Warning: Invalid settings.toml. Using default.")
             
         try:
-            self.sensor3 = os.getenv("sensor3")
-            self.sensor3Pins = stringToArray(os.getenv("sensor3Pins"))
-            self.sensor3CorrectTemp = os.getenv("sensor3CorrectTemp")
+            self.sensor3_name = os.getenv("sensor3_name")
+            self.sensor3_pins = stringToArray(os.getenv("sensor3_pins"))
+            self.sensor3_correct_temp = os.getenv("sensor3_correct_temp")
         except ValueError:
-            self.sensor3 = None
-            self.sensor3Pins = None
-            self.sensor3CorrectTemp = "False"
+            self.sensor3_name = None
+            self.sensor3_pins = None
+            self.sensor3_correct_temp = "False"
             print(f"Warning: Invalid settings.toml. Using default.")
 
 ############################
@@ -101,17 +101,17 @@ class LabServer:
         last_acquisition_time = time.monotonic()
         
         try:
-            self.mongoURL = os.getenv("mongoURL")
-            self.mongoSecretKey = os.getenv("mongoSecretKey")
-            self.deviceName = os.getenv("deviceName")
-            self.certPath = os.getenv("certPath")
-            self.isPicoSubmitMongo = os.getenv("isPicoSubmitMongo")
+            self.mongo_url = os.getenv("mongo_url")
+            self.mongo_secret_key = os.getenv("mongo_secret_key")
+            self.device_name = os.getenv("device_name")
+            self.cert_path = os.getenv("cert_path")
+            self.is_pico_submit_mongo = os.getenv("is_pico_submit_mongo")
         except:
-            self.mongoURL = None
-            self.mongoSecretKey = None
-            self.deviceName = None
-            self.certPath = None
-            self.isPicoSubmitMongo = "False"
+            self.mongo_url = None
+            self.mongo_secret_key = None
+            self.device_name = None
+            self.cert_path = None
+            self.is_pico_submit_mongo = "False"
             
         try:
             self.connect_wifi()
@@ -169,7 +169,7 @@ class LabServer:
         
         ### Submission from Pico with certificate handling
         ssl_context = ssl.create_default_context()
-        ROOT_CA_CERT = self.readCert(self.certPath)
+        ROOT_CA_CERT = self.readCert(self.cert_path)
         try:
             ssl_context.load_verify_locations(cadata=ROOT_CA_CERT)
             print("Custom Root CA successfully loaded.")
@@ -244,9 +244,9 @@ class LabServer:
             except AttributeError:
                 submitMongo = request.args.get("submitMongo")
                                 
-            if submitMongo.lower() == 'true' and self.isPicoSubmitMongo.lower() == 'true':
+            if submitMongo.lower() == 'true' and self.is_pico_submit_mongo.lower() == 'true':
                 print("\nSubmitting data to MongoDB")
-                url = self.mongoURL+"/LabMonitorDB/api/submit-sensor-data"
+                url = self.mongo_url+"/LabMonitorDB/api/submit-sensor-data"
                 self.sendDataMongo(url, data_dict)
 
             headers = {"Content-Type": "application/json"}
@@ -340,9 +340,9 @@ class LabServer:
                     #print(data_dict)
                     
                     # Log to MongoDB if configured for Pico submission
-                    if self.isPicoSubmitMongo.lower() == 'true':
+                    if self.is_pico_submit_mongo.lower() == 'true':
                         print("\nSubmitting scheduled data to MongoDB")
-                        url = self.mongoURL + "/LabMonitorDB/api/submit-sensor-data"
+                        url = self.mongo_url + "/LabMonitorDB/api/submit-sensor-data"
                         self.sendDataMongo(url, data_dict)
                     
                     last_acquisition_time = current_time # Reset the timer
@@ -375,9 +375,9 @@ class LabServer:
             return None
             
     def assembleJson(self):
-        sensData1 = self.sensors.getData(self.sensors.envSensor1, self.sensors.envSensor1Name, self.sensors.sensor1CorrectTemp)
-        sensData2 = self.sensors.getData(self.sensors.envSensor2, self.sensors.envSensor2Name, self.sensors.sensor2CorrectTemp)
-        sensData3 = self.sensors.getData(self.sensors.envSensor3, self.sensors.envSensor3Name, self.sensors.sensor3CorrectTemp)
+        sensData1 = self.sensors.getData(self.sensors.envSensor1, self.sensors.envSensor1_name, self.sensors.sensor1_correct_temp)
+        sensData2 = self.sensors.getData(self.sensors.envSensor2, self.sensors.envSensor2_name, self.sensors.sensor2_correct_temp)
+        sensData3 = self.sensors.getData(self.sensors.envSensor3, self.sensors.envSensor3_name, self.sensors.sensor3_correct_temp)
 
         UTC = self.getUTC()
 
@@ -401,10 +401,10 @@ class LabServer:
             "version": version,
             "libSensors_version": self.sensors.sensDev.version,
             "UTC": UTC,
-            "mongoURL": self.mongoURL,
-            "mongoSecretKey" : self.mongoSecretKey,
-            "device_name" : self.deviceName,
-            "isPicoSubmitMongo" : self.isPicoSubmitMongo,
+            "mongo_url": self.mongo_url,
+            "mongo_secret_key" : self.mongo_secret_key,
+            "device_name" : self.device_name,
+            "is_pico_submit_mongo" : self.is_pico_submit_mongo,
             }
         return data_dict
             
@@ -443,8 +443,8 @@ class LabServer:
             'Accept': 'application/json'
         }
         
-        if self.mongoSecretKey:
-            headers['Authorization'] = f'Bearer {self.mongoSecretKey}'
+        if self.mongo_secret_key:
+            headers['Authorization'] = f'Bearer {self.mongo_secret_key}'
         
         try:
             response = self.requests.post(
@@ -481,19 +481,19 @@ class Sensors:
         self.envSensor1 = None
         self.envSensor2 = None
         self.envSensor3 = None
-        self.envSensor1Name = conf.sensor1
-        self.envSensor2Name = conf.sensor2
-        self.envSensor3Name = conf.sensor3
-        self.envSensor1Pins = conf.sensor1Pins
-        self.envSensor2Pins = conf.sensor2Pins
-        self.envSensor3Pins = conf.sensor3Pins
-        self.sensor1CorrectTemp = conf.sensor1CorrectTemp
-        self.sensor2CorrectTemp = conf.sensor2CorrectTemp
-        self.sensor3CorrectTemp = conf.sensor3CorrectTemp
+        self.envSensor1_name = conf.sensor1_name
+        self.envSensor2_name = conf.sensor2_name
+        self.envSensor3_name = conf.sensor3_name
+        self.envSensor1_Pins = conf.sensor1_pins
+        self.envSensor2_pins = conf.sensor2_pins
+        self.envSensor3_pins = conf.sensor3_pins
+        self.sensor1_correct_temp = conf.sensor1_correct_temp
+        self.sensor2_correct_temp = conf.sensor2_correct_temp
+        self.sensor3_correct_temp = conf.sensor3_correct_temp
         
-        self.envSensor1 = self.sensDev.initSensor(conf.sensor1, conf.sensor1Pins)
-        self.envSensor2 = self.sensDev.initSensor(conf.sensor2, conf.sensor2Pins)
-        self.envSensor3 = self.sensDev.initSensor(conf.sensor3, conf.sensor3Pins)
+        self.envSensor1 = self.sensDev.initSensor(conf.sensor1_name, conf.sensor1_pins)
+        self.envSensor2 = self.sensDev.initSensor(conf.sensor2_name, conf.sensor2_pins)
+        self.envSensor3 = self.sensDev.initSensor(conf.sensor3_name, conf.sensor3_pins)
 
         if self.envSensor1 != None:
             self.avDeltaT = microcontroller.cpu.temperature - self.envSensor1.temperature
@@ -502,10 +502,10 @@ class Sensors:
 
         self.numTimes = 1
         
-    def getData(self, envSensor, envSensorName, correctTemp):
+    def getData(self, envSensor, envSensor_name, correct_temp):
         t_cpu = microcontroller.cpu.temperature
         if not envSensor:
-            print(f"{envSensorName} not initialized. Using CPU temp with estimated offset.")
+            print(f"{envSensor_name} not initialized. Using CPU temp with estimated offset.")
             if self.numTimes > 1 and self.avDeltaT != 0 :
                 return {'temperature': f"{round(t_cpu - self.avDeltaT, 1)}",
                         'RH': '--',
@@ -519,7 +519,7 @@ class Sensors:
                         'HI': '--',
                         'type': 'CPU raw'}
         try:
-            envSensorData = self.sensDev.getSensorData(envSensor, envSensorName, correctTemp)
+            envSensorData = self.sensDev.getSensorData(envSensor, envSensor_name, correct_temp)
             delta_t = t_cpu - float(envSensorData['temperature'])
             if self.numTimes >= 2e+1:
                 self.numTimes = int(1e+1)
@@ -529,7 +529,7 @@ class Sensors:
             time.sleep(0.5)
             return envSensorData
         except:
-            print(f"{envSensorName} not available. Av CPU/MCP T diff: {self.avDeltaT}")
+            print(f"{envSensor_name} not available. Av CPU/MCP T diff: {self.avDeltaT}")
             time.sleep(0.5)
             return {'temperature': f"{round(t_cpu-self.avDeltaT, 1)}",
                     'RH': '--',
