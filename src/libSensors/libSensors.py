@@ -37,7 +37,10 @@ class SensorDevices:
                 envSensor = self.initENS160_AHT21(pins)
             else:
                 envSensor = None
-            print(f"Temperature sensor ({envSensor_name}) found and initialized.")
+            if envSensor is not None:
+                print(f"Temperature sensor ({envSensor_name}) found and initialized.")
+            else:
+                print(f"Temperature sensor not installed")
             return envSensor
         except Exception as e:
             print(f"Failed to initialize enironmental sensor ({envSensor_name}): {e}")
@@ -174,7 +177,7 @@ class SensorDevices:
                 'libSensors_version': self.version}
                 
     # Temperature correction for MAX31865
-    def correct_tempMax31865(self, mt):
+    def correct_tempMAX31865(self, mt):
         return mt
                 
     ##############################################

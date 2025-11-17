@@ -24,7 +24,8 @@ SENSOR_CHOICES = [
     "MAX31865",
     "BME280",
     "BME680",
-    "ENS160_AHT21"
+    "ENS160_AHT21",
+    "None"
 ]
 
 # Standard choices for all boolean fields
