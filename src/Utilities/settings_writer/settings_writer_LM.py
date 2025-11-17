@@ -43,14 +43,14 @@ DEFAULT_SETTINGS = {
         'CIRCUITPY_WEB_API_PORT': 205
     },
     'sensors': {
-        'sensor1_name': 'BME280',
-        'sensor1_pins': '10,11,8,9',
-        'sensor1_correct_temp': True,
+        'sensor1_name': 'AHT21',
+        'sensor1_pins': '15,14',
+        'sensor1_correct_temp': False,
         'sensor2_name': 'MAX31865',
         'sensor2_pins': '18,19,16,17',
         'sensor2_correct_temp': False,
-        'sensor3_name': 'MCP9808',
-        'sensor3_pins': '15,14',
+        'sensor3_name': 'None',
+        'sensor3_pins': '10,11,8,9',
         'sensor3_correct_temp': False
     },
     'database': {
@@ -59,7 +59,7 @@ DEFAULT_SETTINGS = {
         'cert_path': '/static/cert/cert.pem'
     },
     'device': {
-        'device_name': 'EnvironmentalChamber',
+        'device_name': 'PicoTesting',
         'is_pico_submit_mongo': True
     },
 }
