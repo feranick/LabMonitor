@@ -738,9 +738,9 @@ const FixedInfoPlugin = {
             `Date: ${dateLabel}`,
             `Time: ${timeLabel}`,
             `S1 Temp: ${temp1 !== null ? temp1 + ' \u00B0C' : '--'}`,
-            `S1 WBT: ${wbt1 !== null ? wbt1 + ' \u00B0C' : '--'}`,
-            `S1 RH: ${rh1 !== null ? rh1 + ' %' : '--'}`,
             `S2 Temp: ${temp2 !== null ? temp2 + ' \u00B0C' : '--'}`,
+            `S1 RH: ${rh1 !== null ? rh1 + ' %' : '--'}`,
+            `S1 WBT: ${wbt1 !== null ? wbt1 + ' \u00B0C' : '--'}`,
             `S3 Temp: ${temp3 !== null ? temp3 + ' \u00B0C' : '--'}`,
         ];
         
