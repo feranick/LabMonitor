@@ -1,4 +1,4 @@
-let version = "2025.11.15.1";
+let version = "2025.11.17.1";
 let sensorChart;
 let hoveredDataIndex = -1;
 let nameSelIndex="LabMonitorViewer_device_dropdown";
@@ -300,17 +300,17 @@ function exportToPng() {
 }
 
 function exportToCsv() {
-    const headers = ['timestamp', 'sens1_Temp', 'sens1_RH', 'sens1_WBT', 'sens2_Temp', 'sens2_RH', 'sens3_Temp', 'sens3_RH'];
+    const headers = ['timestamp', 'sens1_Temp', 'sens2_Temp', 'sens1_RH', 'sens1_WBT', 'sens1_HI', 'sens2_RH', 'sens3_Temp', 'sens3_RH'];
     let csvContent = "data:text/csv;charset=utf-8," + headers.join(',') + "\n";
 
     for (let i = 0; i < chartDataStore.isoLabels.length; i++) {
         const row = [
             chartDataStore.isoLabels[i],
             chartDataStore.sens1_Temp[i],
+            chartDataStore.sens2_Temp[i],
             chartDataStore.sens1_RH[i],
             chartDataStore.sens1_HI[i],
             chartDataStore.sens1_WBT[i],
-            chartDataStore.sens2_Temp[i],
             chartDataStore.sens2_RH[i],
             chartDataStore.sens3_Temp[i],
             chartDataStore.sens3_RH[i]
