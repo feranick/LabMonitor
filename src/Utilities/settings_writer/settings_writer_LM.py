@@ -1,18 +1,16 @@
 # **********************************************
 # * LabMonitor - settings.toml Editor
 # * Pico driven
-# * v2025.11.17.1
+# * v2025.11.18.1
 # * By: Nicola Ferralis <feranick@hotmail.com>
 # **********************************************
 
-version = "2025.11.17.1"
+version = "2025.11.18.1"
 
 import tkinter as tk
 from tkinter import messagebox, filedialog
-import os
-import sys
-import tomli
-import tomli_w
+import os, sys, subprocess, platform
+import tomli, tomli_w
 
 # --- Configuration Constants ---
 CONFIG_FILENAME = "settings.toml"
@@ -123,9 +121,12 @@ class ConfigApp(tk.Tk):
         action_frame.grid(row=1, column=0, sticky="ew", padx=10, pady=(0, 10))
         
         # Using plain tk.Button with NO color/font customization
-        tk.Button(action_frame, text="Load Config", command=self.load_config).pack(side=tk.LEFT, padx=(0, 5))
+        tk.Button(action_frame, text="Load from Pico", command=lambda: self.load_config(True)).pack(side=tk.LEFT, padx=(0, 5))
         
-        # NEW Button: Save to File (Local Save)
+        # Using plain tk.Button with NO color/font customization
+        tk.Button(action_frame, text="Load from local file", command=lambda: self.load_config(False)).pack(side=tk.LEFT, padx=(0, 5))
+        
+        # Button: Save to File (Local Save)
         tk.Button(action_frame, text="Save to File", command=self.save_config_to_file).pack(side=tk.LEFT, padx=5)
         
         # Using plain tk.Button with NO color/font customization
@@ -180,6 +181,17 @@ class ConfigApp(tk.Tk):
                 
                 widget = None
                 
+                if section == 'wifi' and key.endswith('_SSID'):
+                    # Wifi SSIDs Dropdown
+                    self.selected_ssid = tk.StringVar(scrollable_frame)
+                    ssids = self.get_ssids()
+                    var.set(ssids[0] if ssids else "Loading...")
+                    widget = tk.OptionMenu(
+                        scrollable_frame,
+                        var,
+                        *ssids)
+                    widget.config(width=37, font=self.font_style)
+                    
                 if section == 'sensors' and key.endswith('_name'):
                     # Sensor Name Dropdown
                     initial_choice = str(default_val) if str(default_val) in SENSOR_CHOICES else SENSOR_CHOICES[0]
@@ -285,7 +297,6 @@ class ConfigApp(tk.Tk):
         for section, defaults in DEFAULT_SETTINGS.items():
             for key, default_val in defaults.items():
                 ui_value = self.entries[section][key].get().strip()
-                
                 # --- Type Casting and Validation ---
                 if isinstance(default_val, bool):
                     # Convert to string "True" or "False" regardless of original type
@@ -316,18 +327,31 @@ class ConfigApp(tk.Tk):
 
     # --- Load/Save Handlers using tomli/tomli_w ---
 
-    def load_config(self):
+    def load_config(self,fromDevice):
         """
         Loads settings.toml using tomli and updates the UI.
-        
-        MODIFIED: Now expects a flat TOML file structure.
         """
-        path = self.circuitpy_path.get()
-        toml_path = os.path.join(path, CONFIG_FILENAME)
+        if fromDevice:
+            # This looks for settings.toml directly in the device
+            path = self.circuitpy_path.get()
+            toml_path = os.path.join(path, CONFIG_FILENAME)
         
-        if not os.path.exists(toml_path):
-            messagebox.showinfo("File Not Found", f"{CONFIG_FILENAME} not found. Using default settings.")
-            return
+            if not os.path.exists(toml_path):
+                messagebox.showinfo("File Not Found", f"{CONFIG_FILENAME} not found. Using default settings.")
+                return
+                
+        else:
+        # Otherwise open file dialog to choose save location
+            toml_path = filedialog.askopenfilename(
+                defaultextension=".toml",
+                initialfile=os.path.splitext(CONFIG_FILENAME)[0],
+                title="Open TOML Configuration File",
+                filetypes=[("TOML files", "*.toml"), ("All files", "*.*")]
+            )
+        
+            if not toml_path:
+                # User canceled the dialog
+                return
 
         try:
             # tomli requires 'rb' (read binary) mode
@@ -408,7 +432,73 @@ class ConfigApp(tk.Tk):
         except Exception as e:
             messagebox.showerror("Save Error", f"Error saving file:\n{e}")
             print(f"Error saving config locally: {e}")
+            
+    def get_ssids(self):
+        """Executes the OS command to find available SSIDs and returns a list."""
+        ssids = [] # Default option while loading/if no networks found
+        os_name = platform.system()
 
+        try:
+            if os_name == "Windows":
+                # Command to show available wireless networks
+                result = subprocess.run(
+                    ["netsh", "wlan", "show", "networks"],
+                    capture_output=True,
+                    text=True,
+                    check=True
+                )
+                # Parse the output for SSIDs
+                lines = result.stdout.splitlines()
+                ssids = []
+                for line in lines:
+                    if "SSID" in line and "BSSID" not in line:
+                        # Extracts the part after the colon and strips whitespace
+                        ssid_name = line.split(":", 1)[1].strip()
+                        if ssid_name != "SSID": # Avoid the header line
+                            ssids.append(ssid_name)
+            
+            elif os_name == "Darwin":
+                command = "networksetup -listpreferredwirelessnetworks en0"
+                result = subprocess.run(
+                    command,
+                    shell=True,
+                    capture_output=True,
+                    text=True,
+                    check=True
+                )
+                # Parse the output for SSIDs
+                lines = result.stdout.splitlines()
+                for line in lines:
+                    if "Preferred" not in line:
+                        ssids.append(line.strip("\t"))
+                        
+            elif os_name == "Linux":
+                command = "nmcli device wifi list | awk '{if(NR>1) print $3}'"
+                result = subprocess.run(
+                    command,
+                    shell=True,
+                    capture_output=True,
+                    text=True,
+                    check=True
+                )
+                # Parse the output for SSIDs
+                lines = result.stdout.splitlines()
+                for line in lines:
+                    if "Preferred" not in line:
+                        ssids.append(line)
+            return ssids
+            
+            # Remove duplicates and ensure list is not empty
+            #unique_ssids = sorted(list(set(ssids)))
+            #if unique_ssids:
+                #return unique_ssids
+            #    return ssids
+            #else:
+            #    return ["No Networks Found"]
+
+        except Exception as e:
+            print(f"Error fetching SSIDs: {e}")
+            return ["Error Fetching SSIDs"]
 
 if __name__ == "__main__":
     app = ConfigApp()
