@@ -200,7 +200,7 @@ async function updatePlot(flag) {
     document.getElementById("sens1_Temp_current").style.color = "#00008B";
     document.getElementById("sens1_HI_current").textContent = data.sens1_HI + " \u00B0C";
     document.getElementById("sens1_HI_current").style.color = "#00008B";
-    document.getElementById("sens1_RH_current").textContent = data.sens1_RH + "%";
+    document.getElementById("sens1_RH_current").textContent = data.sens1_RH + " %";
     document.getElementById("sens1_WBT_current").textContent = s1_WBT_string + " \u00B0C"; 
     document.getElementById("sens2_Temp_current").textContent = data.sens2_Temp + " \u00B0C";
     document.getElementById("sens2_Temp_current").style.color = "#00008B";
