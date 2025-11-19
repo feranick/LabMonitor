@@ -309,8 +309,8 @@ function exportToCsv() {
             chartDataStore.sens1_Temp[i],
             chartDataStore.sens2_Temp[i],
             chartDataStore.sens1_RH[i],
-            chartDataStore.sens1_HI[i],
             chartDataStore.sens1_WBT[i],
+            chartDataStore.sens1_HI[i],
             chartDataStore.sens2_RH[i],
             chartDataStore.sens3_Temp[i],
             chartDataStore.sens3_RH[i]
