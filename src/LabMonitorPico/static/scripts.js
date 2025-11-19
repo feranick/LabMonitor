@@ -180,6 +180,8 @@ async function sendControlCommand(command, interval = 30) {
              return;
         }
 
+        const user_comment = document.getElementById('userComment').value;
+        
         const url = `/api/control`;
         console.log(`Sending command '${command}' to ${url}`);
 
@@ -188,7 +190,8 @@ async function sendControlCommand(command, interval = 30) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
                 command: command, 
-                interval: interval
+                interval: interval,
+                user_comment: user_comment
             })
         });
 
@@ -493,7 +496,7 @@ async function syncPicoStatus() {
             interval = result.interval;
             console.log("Current acqusition interval: "+interval);
             document.getElementById('refreshRate').value = result.interval;
-            
+            document.getElementById('userComment').value = result.user_comment;
 
             if (isPicoRunning) {
                 toggleBtn.textContent = 'Stop Acquisition';
@@ -657,6 +660,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const toggleBtn = document.getElementById('toggleButton');
     const clearBtn = document.getElementById('clearButton'); // <-- NEW
     const refreshInput = document.getElementById('refreshRate');
+    const userCommentInput = document.getElementById('userComment');
     const pngBtn = document.getElementById('savePngButton');
     const csvBtn = document.getElementById('saveCsvButton');
     const sUIBtn = document.getElementById('simpleUIBtn');
@@ -692,6 +696,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     resetZoomBtn.addEventListener('click', resetZoom);
     
     refreshInput.addEventListener('change', refreshRateLogic);
+    userCommentInput.addEventListener('change', refreshRateLogic);
     
     // Checkboxes
     checkboxes.forEach(cb => {

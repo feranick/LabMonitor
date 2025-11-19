@@ -1,11 +1,11 @@
 # **********************************************
 # * LabMonitor - Rasperry Pico W
 # * Pico driven
-# * v2025.11.18.1
+# * v2025.11.19.2
 # * By: Nicola Ferralis <feranick@hotmail.com>
 # **********************************************
 
-version = "2025.11.18.1"
+version = "2025.11.19.2"
 
 import wifi
 import time
@@ -95,6 +95,7 @@ class LabServer:
         self.ntp = None
         self.server = None
         self.ip = "0.0.0.0"
+        self.user_comment = ""
         
         # Initialize timing for the data loop
         global last_acquisition_time
@@ -197,6 +198,7 @@ class LabServer:
                 data = request.json()
                 command = data.get("command", "").lower()
                 new_interval = data.get("interval")
+                self.user_comment = data.get("user_comment")
                 
                 # --- Update Interval if provided and valid ---
                 if new_interval is not None and isinstance(new_interval, (int, float)) and new_interval >= 1:
@@ -227,7 +229,7 @@ class LabServer:
         # --- Acquisition Status Route (for UI sync) ---
         @self.server.route("/api/acquisition_status", methods=[GET])
         def api_acquisition_status(request):
-            status_data = {"status": self.get_acquisition_status(), "interval": ACQUISITION_INTERVAL}
+            status_data = {"status": self.get_acquisition_status(), "interval": ACQUISITION_INTERVAL, "user_comment": self.user_comment}
             print(f"status: {status_data['status']}")
             return JSONResponse(request, status_data)
 
@@ -405,6 +407,7 @@ class LabServer:
             "mongo_secret_key" : self.mongo_secret_key,
             "device_name" : self.device_name,
             "is_pico_submit_mongo" : self.is_pico_submit_mongo,
+            "user_comment": self.user_comment,
             }
         return data_dict
             
