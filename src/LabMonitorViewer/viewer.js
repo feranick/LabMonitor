@@ -1,4 +1,4 @@
-let version = "2025.11.17.1";
+let version = "2025.11.18.1";
 let sensorChart;
 let hoveredDataIndex = -1;
 let nameSelIndex="LabMonitorViewer_device_dropdown";
