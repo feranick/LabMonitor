@@ -1,11 +1,11 @@
 # **********************************************
 # * LabMonitor - Rasperry Pico W
 # * Pico driven
-# * v2025.11.17.1
+# * v2025.11.18.1
 # * By: Nicola Ferralis <feranick@hotmail.com>
 # **********************************************
 
-version = "2025.11.17.1"
+version = "2025.11.18.1"
 
 import wifi
 import time
@@ -496,7 +496,11 @@ class Sensors:
         self.envSensor3 = self.sensDev.initSensor(conf.sensor3_name, conf.sensor3_pins)
 
         if self.envSensor1 != None:
-            self.avDeltaT = microcontroller.cpu.temperature - self.envSensor1.temperature
+            if isinstance(self.envSensor1, list):
+                sens1_temp = self.envSensor1[0].temperature
+            else:
+                sens1_temp = self.envSensor1.temperature
+            self.avDeltaT = microcontroller.cpu.temperature - sens1_temp
         else:
             self.avDeltaT = 0
 
