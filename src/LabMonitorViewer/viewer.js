@@ -1,4 +1,4 @@
-let version = "2025.11.18.1";
+let version = "2025.11.21.1";
 let sensorChart;
 let hoveredDataIndex = -1;
 let nameSelIndex="LabMonitorViewer_device_dropdown";
@@ -473,7 +473,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Set default date range (e.g., last 24 hours) ---
     const endDate = new Date();
     const startDate = new Date();
-    startDate.setDate(endDate.getDate() - 1); // 24 hours ago
+    //startDate.setDate(endDate.getDate() - 1); // 24 hours ago
+    startDate.setHours(endDate.getHours() - 6); // 6 hours ago
 
     // Format for datetime-local input (YYYY-MM-DDTHH:MM)
     const toLocalISOString = (date) => {
