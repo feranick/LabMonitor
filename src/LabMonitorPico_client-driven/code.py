@@ -1,11 +1,11 @@
 # **********************************************
 # * LabMonitor - Rasperry Pico W
 # * Client driven
-# * v2025.11.19.1
+# * v2025.11.26.1
 # * By: Nicola Ferralis <feranick@hotmail.com>
 # **********************************************
 
-version = "2025.11.19.1-client-driven"
+version = "2025.11.26.1-client-driven"
 
 import wifi
 import time
@@ -24,7 +24,7 @@ from adafruit_httpserver import Server, MIMETypes, Response, GET, POST, JSONResp
 
 import adafruit_ntp
 
-from libSensors import SensorDevices
+from libSensors import SensorDevices, overclock
 
 ############################
 # Initial WiFi/Safe Mode Check
@@ -52,6 +52,11 @@ if supervisor.runtime.safe_mode_reason is not None:
 ############################
 class Conf:
     def __init__(self):
+        try:
+            overclock(os.getenv("overclock"))
+        except:
+            overclock("False")
+    
         try:
             self.sensor1_name = os.getenv("sensor1_name")
             self.sensor1_pins = stringToArray(os.getenv("sensor1_pins"))
