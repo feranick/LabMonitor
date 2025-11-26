@@ -2,11 +2,11 @@
 # **********************************************
 # * LabMonitor - settings.toml Editor
 # * Pico driven
-# * v2025.11.18.1
+# * v2025.11.26.1
 # * By: Nicola Ferralis <feranick@hotmail.com>
 # **********************************************
 
-version = "2025.11.18.1"
+version = "2025.11.26.1"
 
 import tkinter as tk
 from tkinter import messagebox, filedialog
@@ -40,6 +40,9 @@ DEFAULT_SETTINGS = {
         'CIRCUITPY_WEB_INSTANCE_NAME': 'LabMonitor',
         'CIRCUITPY_WEB_API_PASSWORD': 'passw0rd',
         'CIRCUITPY_WEB_API_PORT': 205
+    },
+    'system': {
+        'overclock': False
     },
     'sensors': {
         'sensor1_name': 'AHT21',
