@@ -1,7 +1,9 @@
-let version = "2025.11.21.1";
+let version = "2025.12.04.1";
 let sensorChart;
 let hoveredDataIndex = -1;
 let nameSelIndex="LabMonitorViewer_device_dropdown";
+let timeSelectedValue = 1;
+let timeSelectedIndex = 3;
 
 // This object will store ALL data points, just like before.
 const chartDataStore = {
@@ -119,11 +121,15 @@ async function fetchAndDisplayData() {
     
     var API_ENDPOINT = `/LabMonitorDB/api/get-data?start=${startDate}&end=${endDate}`;
     
-    const dropdown = document.getElementById('deviceDropdown');
-    const selectedValue = dropdown.value;
+    const devDropdown = document.getElementById('deviceDropdown');
+    const devSelectedValue = devDropdown.value;
         
-    if (selectedValue != "All") {
-        API_ENDPOINT += `&device_name=${selectedValue}`;
+    const timeDropdown = document.getElementById('timePeriodDropdown');
+    timeSelectedValue = timeDropdown.value;
+    console.log("Display time Period - fetchAndDisplayData: "+ timeSelectedValue);
+    
+    if (devSelectedValue != "All") {
+        API_ENDPOINT += `&device_name=${devSelectedValue}`;
         }
             
     console.log(`Fetching data from: ${API_ENDPOINT}`);
@@ -223,10 +229,10 @@ async function setDeviceNames() {
     selIndex = deviceDropdown.selectedIndex;
 
     let indexToSet = 0; // Default to the first option
-    const cookieValue = getCookie(nameSelIndex);
+    const devCookieValue = getCookie("nameSelIndex");
 
-    if (cookieValue !== null) {
-        const parsedIndex = parseInt(cookieValue, 10);
+    if (devCookieValue !== null) {
+        const parsedIndex = parseInt(devCookieValue, 10);
         if (!isNaN(parsedIndex) && parsedIndex >= 0 && parsedIndex < deviceDropdown.options.length) {
             indexToSet = parsedIndex;
             }
@@ -380,6 +386,32 @@ function setCurrentEndDateTime() {
   document.getElementById('endDate').value = `${year}-${month}-${day}T${hours}:${minutes}`;
 }
 
+function setStartDateTime() {
+    // --- Set default date range (e.g., last 24 hours) ---
+    const endDate = new Date();
+    const startDate = new Date();
+    //startDate.setDate(endDate.getDate() - 1); // 24 hours ago
+    startDate.setHours(endDate.getHours() - timeSelectedValue); // 6 hours ago
+
+    // Format for datetime-local input (YYYY-MM-DDTHH:MM)
+    const toLocalISOString = (date) => {
+        const offset = date.getTimezoneOffset() * 60000;
+        const localISOTime = (new Date(date.getTime() - offset)).toISOString().slice(0, 16);
+        return localISOTime;
+    };
+
+    document.getElementById('startDate').value = toLocalISOString(startDate);
+    document.getElementById('endDate').value = toLocalISOString(endDate);
+}
+
+function setStartTimeDropdown() {
+    if (cookieExists("timeSelectedIndex")) {
+        timeSelectedIndex = getCookie("timeSelectedIndex");
+        timeSelectedValue = getCookie("timeSelectedValue");
+        }
+    document.getElementById('timePeriodDropdown').selectedIndex = timeSelectedIndex;
+}
+
 // --- Page Load Event ---
 document.addEventListener('DOMContentLoaded', () => {
     document.getElementById("version").textContent = version;
@@ -393,14 +425,26 @@ document.addEventListener('DOMContentLoaded', () => {
     const resetZoomBtn = document.getElementById('resetZoomButton'); 
     const checkboxes = document.querySelectorAll('.data-checkbox');
     const deviceDropdown = document.getElementById('deviceDropdown');
+    const timePeriodDropdown = document.getElementById('timePeriodDropdown');
     
     const canvas = document.getElementById('sensorChart');
     
     // --- Initialize device Dropdown ---
     setDeviceNames();
     deviceDropdown.addEventListener('change', function() {
-        setCookie(nameSelIndex, this.selectedIndex ,1000);
+        setCookie("nameSelIndex", this.selectedIndex ,1000);
         console.log(nameSelIndex+"  "+ this.selectedIndex);
+    });
+    
+    // --- Initialize time period Dropdown ---
+    setStartTimeDropdown();
+    timePeriodDropdown.addEventListener('change', function() {
+        timeSelectedValue = this.value;
+        timeSelectedIndex = this.selectedIndex;
+        setCookie("timeSelectedValue", this.value ,1000);
+        setCookie("timeSelectedIndex", this.selectedIndex ,1000);
+        setStartDateTime();
+        setStartDateTime();
     });
     
     // --- Initialize the Chart ---
@@ -456,7 +500,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
     // Mobile-specific touch events
-    fetchDataBtn.addEventListener('touchstart', startPress);
+    fetchDataBtn.addEventListener('touchstart', startPress, { passive: true });
     fetchDataBtn.addEventListener('touchend', endPress);
     fetchDataBtn.addEventListener('touchcancel', endPress);
     
@@ -469,22 +513,9 @@ document.addEventListener('DOMContentLoaded', () => {
     checkboxes.forEach(cb => {
         cb.addEventListener('change', updateVisibleDatasets);
     });
+    
+    setStartDateTime();
 
-    // --- Set default date range (e.g., last 24 hours) ---
-    const endDate = new Date();
-    const startDate = new Date();
-    //startDate.setDate(endDate.getDate() - 1); // 24 hours ago
-    startDate.setHours(endDate.getHours() - 6); // 6 hours ago
-
-    // Format for datetime-local input (YYYY-MM-DDTHH:MM)
-    const toLocalISOString = (date) => {
-        const offset = date.getTimezoneOffset() * 60000;
-        const localISOTime = (new Date(date.getTime() - offset)).toISOString().slice(0, 16);
-        return localISOTime;
-    };
-
-    document.getElementById('startDate').value = toLocalISOString(startDate);
-    document.getElementById('endDate').value = toLocalISOString(endDate);
 });
 
 const FixedInfoPlugin = {
@@ -588,5 +619,24 @@ function setCookie(name, value, days) {
   var e = new Date;
   e.setDate(e.getDate() + (days || 365));
   document.cookie = name + '=' + value + ';expires=' + e.toUTCString() + ';path=/;domain=.' + document.domain;
+}
+
+function cookieExists(cookieName) {
+  // Get the entire document.cookie string
+  const cookies = document.cookie;
+
+  // Split the string into individual cookie parts
+  const cookieArray = cookies.split(';');
+
+  // Iterate through each cookie to find the desired one
+  for (let i = 0; i < cookieArray.length; i++) {
+    let cookie = cookieArray[i].trim(); // Remove leading/trailing whitespace
+
+    // Check if the cookie starts with the desired name followed by an equals sign
+    if (cookie.startsWith(cookieName + '=')) {
+      return true; // Cookie found
+    }
+  }
+  return false; // Cookie not found
 }
 

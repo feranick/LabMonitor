@@ -47,6 +47,14 @@
         border: 1px solid #ccc;
         margin-bottom: 10px;
     }
+    #timePeriodDropdown {
+        padding: 5px;
+        font-size: 16px;
+        border-radius: 5px;
+        border: 1px solid #ccc;
+        margin-bottom: 10px;
+    }
+    
     button, input[type="number"], input[type="text"] {
         font-size: 16px;
         padding: 8px 12px;
@@ -97,6 +105,7 @@
         text-align: left;
         font-size: 18px;
         width: 100%;
+        align-items: center;
     }
     .column {
         flex: 1;
@@ -120,12 +129,23 @@
 <fieldset>
     <div class="four-column-layout">
     <div class="column">
-    <label for="startDate">Start Time:</label>
+    <label for="startDate">Start Time:
+        <select id="timePeriodDropdown">
+            <option>1</option>
+            <option>3 </option>
+            <option>6</option>
+            <option>12</option>
+            <option>24</option>
+            <option>36</option>
+            <option>48</option>
+            </select> h
+    </label>
     <input type="datetime-local" id="startDate">
-    <br><label for="endDate">End Time:</label>
+    <br><br><label for="endDate">End Time:</label>
     <input type="datetime-local" id="endDate">
     <br><br><label for="deviceDropdown">Devices:</label>
     <select id="deviceDropdown"></select>
+    <br>
     </div>
     <div class="column">
     <button id="fetchDataButton" title="Normal click: set current time as end date Shift+click: uses listed end date">Fetch Data</button>
