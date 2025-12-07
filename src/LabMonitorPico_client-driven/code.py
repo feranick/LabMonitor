@@ -1,11 +1,11 @@
 # **********************************************
 # * LabMonitor - Rasperry Pico W
 # * Client driven
-# * v2025.11.26.1
+# * v2025.12.07.1
 # * By: Nicola Ferralis <feranick@hotmail.com>
 # **********************************************
 
-version = "2025.11.26.1-client-driven"
+version = "2025.12.07.1-client-driven"
 
 import wifi
 import time
@@ -180,10 +180,6 @@ class LabServer:
         @self.server.route("/")
         def base_route(request):
             return self._serve_static_file(request, 'static/index.html')
-            
-        @self.server.route("/simple.html")
-        def base_route(request):
-            return self._serve_static_file(request, 'static/simple.html')
 
         # Status Check Route (Placeholder)
         #@self.server.route("/status", methods=[GET])
@@ -214,6 +210,10 @@ class LabServer:
         @self.server.route("/scripts.js")
         def icon_route(request):
             return self._serve_static_file(request, 'static/scripts.js')
+        
+        @self.server.route("/simple.html")
+        def base_route(request):
+            return self._serve_static_file(request, 'static/simple.html')
             
         @self.server.route("/simple.js")
         def icon_route(request):

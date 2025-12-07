@@ -1,11 +1,11 @@
 # **********************************************
 # * LabMonitor - Rasperry Pico W
 # * Pico driven
-# * v2025.11.26.1
+# * v2025.12.07.1
 # * By: Nicola Ferralis <feranick@hotmail.com>
 # **********************************************
 
-version = "2025.11.26.1"
+version = "2025.12.07.1"
 
 import wifi
 import time
@@ -189,10 +189,6 @@ class LabServer:
         @self.server.route("/")
         def base_route(request):
             return self._serve_static_file(request, 'static/index.html')
-            
-        @self.server.route("/simple.html")
-        def base_route(request):
-            return self._serve_static_file(request, 'static/simple.html')
 
         # --- Acquisition Control Route ---
         @self.server.route("/api/control", methods=[POST])
@@ -264,6 +260,10 @@ class LabServer:
         @self.server.route("/scripts.js")
         def icon_route(request):
             return self._serve_static_file(request, 'static/scripts.js')
+            
+        @self.server.route("/simple.html")
+        def base_route(request):
+            return self._serve_static_file(request, 'static/simple.html')
             
         @self.server.route("/simple.js")
         def icon_route(request):
