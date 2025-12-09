@@ -25,7 +25,7 @@ async function getFeed(url) {
 //////////////////////////////////////////////
 async function fetchData(flag) {
     try {
-        url = '/api/status?submitMongo='+flag
+        const url = '/api/status?submitMongo='+flag
         console.log(`Requesting data with: `+ url);
         const response = await fetch(url);
         const data = await response.json();
@@ -50,7 +50,7 @@ async function updateStatus(flag) {
     if (!data) return;
     console.log(data);
     
-    datetime = getCurrentDateTimeUTC(data.UTC);
+    const datetime = getCurrentDateTimeUTC(data.UTC);
     
     document.getElementById("sens1_Temp").textContent = data.sens1_Temp + " \u00B0C";
     document.getElementById("sens1_Temp").style.color = "#00008B";
