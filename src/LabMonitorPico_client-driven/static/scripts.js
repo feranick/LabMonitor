@@ -195,6 +195,7 @@ async function updatePlot(flag) {
     }
         
     // --- 2. UPDATE CURRENT MEASUREMENTS ---
+    document.getElementById("device_name").textContent = data.device_name;
     document.getElementById("datetime_current").textContent = datetime;
     document.getElementById("sens1_Temp_current").textContent = data.sens1_Temp + " \u00B0C";
     document.getElementById("sens1_Temp_current").style.color = "#00008B";

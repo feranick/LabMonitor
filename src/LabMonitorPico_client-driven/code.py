@@ -1,11 +1,11 @@
 # **********************************************
 # * LabMonitor - Rasperry Pico W
 # * Client driven
-# * v2025.12.07.1
+# * v2025.12.12.1
 # * By: Nicola Ferralis <feranick@hotmail.com>
 # **********************************************
 
-version = "2025.12.07.1-client-driven"
+version = "2025.12.12.1-client-driven"
 
 import wifi
 import time

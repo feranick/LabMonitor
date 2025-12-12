@@ -76,7 +76,8 @@ async function updateStatus(flag) {
     if (data.sens3_type != "sensor") {
         document.getElementById("sens3_Temp").style.color = "red";
         }
-
+    
+    document.getElementById("device_name").textContent = data.device_name;
     document.getElementById("datetime").textContent = datetime;
     document.getElementById("ip_address").textContent = data.ip;
     document.getElementById("version").textContent = data.version;
