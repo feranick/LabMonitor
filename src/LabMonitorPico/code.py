@@ -2,7 +2,7 @@
 # * LabMonitor - Rasperry Pico W
 # * Pico driven
 # * v2026.03.19.1
-# * By: Nicola Ferralis <feranick@hotmail.com>
+# * By: Nicola Ferralis <ferralis@mit.edu>
 # **********************************************
 
 version = "2026.03.19.1"
@@ -21,7 +21,6 @@ import json
 
 import adafruit_requests
 from adafruit_httpserver import Server, MIMETypes, Response, GET, POST, JSONResponse, FileResponse
-
 import adafruit_ntp
 
 from libSensors import SensorDevices, overclock
@@ -170,9 +169,6 @@ class LabServer:
         pool = socketpool.SocketPool(wifi.radio)
         self.server = Server(pool, debug=True)
         
-        ### Original setup - no local submission
-        #self.requests = adafruit_requests.Session(pool, ssl.create_default_context())
-        
         ### Submission from Pico with certificate handling
         ssl_context = ssl.create_default_context()
         ROOT_CA_CERT = self.readCert(self.cert_path)
@@ -185,12 +181,10 @@ class LabServer:
 
         # --- Routes ---
 
-        # Root Route: Serves static/index.html
         @self.server.route("/")
         def base_route(request):
             return self._serve_static_file(request, 'static/index.html')
 
-        # --- Acquisition Control Route ---
         @self.server.route("/api/control", methods=[POST])
         def api_control(request):
             global is_acquisition_running, last_acquisition_time, ACQUISITION_INTERVAL
@@ -201,7 +195,6 @@ class LabServer:
                 new_interval = data.get("interval")
                 self.user_comment = data.get("user_comment")
                 
-                # --- Update Interval if provided and valid ---
                 if new_interval is not None and isinstance(new_interval, (int, float)) and new_interval >= 1:
                     ACQUISITION_INTERVAL = float(new_interval)
                     print(f"Acquisition interval updated to: {ACQUISITION_INTERVAL}s")
@@ -209,7 +202,7 @@ class LabServer:
                 if command == "start":
                     if not is_acquisition_running:
                         is_acquisition_running = True
-                        last_acquisition_time = time.monotonic() # Reset timer on start
+                        last_acquisition_time = time.monotonic() 
                         print("Acquisition: STARTED")
                     message = "Acquisition is now running."
                     
@@ -227,7 +220,6 @@ class LabServer:
                 print(f"Error in /api/control: {e}")
                 return JSONResponse(request, {"success": False, "message": f"Server error: {e}"}, status=500)
 
-        # --- Acquisition Status Route (for UI sync) ---
         @self.server.route("/api/acquisition_status", methods=[GET])
         def api_acquisition_status(request):
             status_data = {"status": self.get_acquisition_status(), "interval": ACQUISITION_INTERVAL, "user_comment": self.user_comment}
@@ -253,8 +245,6 @@ class LabServer:
                 self.sendDataMongo(url, data_dict)
 
             headers = {"Content-Type": "application/json"}
-
-            # Return the response using the compatible Response constructor
             return Response(request, json.dumps(data_dict), headers=headers)
 
         @self.server.route("/scripts.js")
@@ -277,7 +267,6 @@ class LabServer:
         def favicon_route(request):
             return self._serve_static_file(request, 'static/favicon.ico', content_type="image/x-icon")
 
-        # If using a PNG for an app icon:
         @self.server.route("/icon192.png")
         def icon_route(request):
             return self._serve_static_file(request, 'static/icon192.png', content_type="image/png")
@@ -286,24 +275,17 @@ class LabServer:
         def icon_route(request):
             return self._serve_static_file(request, 'static/icon.png', content_type="image/png")
 
-        # Start the server
         self.server.start(host=self.ip, port=80)
 
     def _serve_static_file(self, request, filepath, content_type=None):
         """Streams a file from flash memory using FileResponse to prevent memory fragmentation."""
         try:
-            # We use os.stat to verify the file exists before returning the response. 
-            # This allows us to catch a missing file and cleanly return a 404.
             os.stat(filepath)
-            
-            # FileResponse automatically handles chunked reading and streaming
             if content_type:
                 return FileResponse(request, filepath, content_type=content_type)
-            
             return FileResponse(request, filepath)
 
         except OSError as e:
-            # Handle File Not Found or other OS errors
             print(f"Error locating or accessing file {filepath}: {e}")
             return Response(request, "File Not Found", status=404)
 
@@ -311,7 +293,6 @@ class LabServer:
         global is_acquisition_running, last_acquisition_time
         
         while True:
-            # 1. Check/Handle WiFi
             if not wifi.radio.connected:
                 print("WiFi connection lost. Rebooting...")
                 self.reboot()
@@ -326,49 +307,37 @@ class LabServer:
             except Exception as e:
                 print(f"Unexpected critical error in server poll: {e}")
 
-            # 3. Check Acquisition Timer (NON-BLOCKING)
             if is_acquisition_running:
                 current_time = time.monotonic()
                 if (current_time - last_acquisition_time) >= ACQUISITION_INTERVAL:
                     print(f"\nScheduled acquisition triggered at {current_time:.2f}")
                     print("-" * 40)
                     
-                    # Your existing logic from /api/status, but without the HTTP wrapper
                     data_dict = self.assembleJson()
-                    #print(data_dict)
                     
-                    # Log to MongoDB if configured for Pico submission
                     if self.is_pico_submit_mongo.lower() == 'true':
                         print("\nSubmitting scheduled data to MongoDB")
                         url = self.mongo_url + "/LabMonitorDB/api/submit-sensor-data"
                         self.sendDataMongo(url, data_dict)
                     
-                    last_acquisition_time = current_time # Reset the timer
+                    last_acquisition_time = current_time 
 
             time.sleep(0.01)
             
-    # --- Helper method to get current status ---
     def get_acquisition_status(self):
         global is_acquisition_running
         return "running" if is_acquisition_running else "stopped"
             
     def readCert(self, file_path):
-        #file_path = "static/cert/cert.txt"
         certificate_content = ""
-
         try:
-            # Open the file in read mode ('r')
             with open(file_path, 'r') as file:
-                # Read the entire content of the file into the variable
                 certificate_content = file.read()
     
             print("File read successfully.")
-            # Optional: Print the content to verify
-            # print(certiicate_content)
             return certificate_content
 
         except OSError as e:
-            # Handle the case where the file or directory doesn't exist
             print(f"Error opening or reading file at {file_path}: {e}")
             return None
             
@@ -427,11 +396,6 @@ class LabServer:
         time.sleep(2)
         microcontroller.reset()
         
-    #####################################################
-    # Submit to Mongo DB
-    # Currently disabled as handled by JS on client side.
-    #####################################################
-    
     def sendDataMongo(self, url, data):
         print("-" * 40)
         print(f"Attempting to POST data to: {url}")
@@ -450,23 +414,20 @@ class LabServer:
                 url,
                 json=data,
                 headers=headers,
-                timeout=10 # Set a timeout for the request
+                timeout=10 
             )
 
-            # Check for success (HTTP 200 series status code)
             if response.status_code in [200, 201]:
                 print("Data successfully sent!")
                 print("Server Response:", response.text)
             else:
                 print(f"Server returned status code: {response.status_code}")
                 try:
-                    # Try to print JSON error response if available
                     print("Server Error Details:", response.json())
                 except:
-                    # Fallback to printing raw text
                     print("Server Error Text:", response.text)
 
-            response.close() # Crucial: always close the response object
+            response.close()
 
         except Exception as e:
             print(f"An error occurred during the POST request: {e}")
