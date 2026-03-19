@@ -229,8 +229,8 @@ class LabServer:
         try:
             os.stat(filepath)
             if content_type:
-                return FileResponse(request, filepath, content_type=content_type)
-            return FileResponse(request, filepath)
+                return FileResponse(request, filepath, root_path="/", content_type=content_type)
+            return FileResponse(request, filepath, root_path="/")
 
         except OSError as e:
             print(f"Error locating or accessing file {filepath}: {e}")
