@@ -2,7 +2,7 @@
 # * LabMonitor - Rasperry Pico W
 # * Client driven
 # * v2026.03.19.1
-# * By: Nicola Ferralis <feranick@hotmail.com>
+# * By: Nicola Ferralis <ferralis@mit.edu>
 # **********************************************
 
 version = "2025.12.12.1-client-driven"
@@ -21,7 +21,6 @@ import json
 
 import adafruit_requests
 from adafruit_httpserver import Server, MIMETypes, Response, GET, POST, JSONResponse, FileResponse
-
 import adafruit_ntp
 
 from libSensors import SensorDevices, overclock
@@ -161,9 +160,6 @@ class LabServer:
         pool = socketpool.SocketPool(wifi.radio)
         self.server = Server(pool, debug=True)
         
-        ### Original setup - no local submission
-        #self.requests = adafruit_requests.Session(pool, ssl.create_default_context())
-        
         ### Submission from Pico with certificate handling
         ssl_context = ssl.create_default_context()
         ROOT_CA_CERT = self.readCert(self.cert_path)
@@ -176,16 +172,9 @@ class LabServer:
 
         # --- Routes ---
 
-        # Root Route: Serves static/index.html
         @self.server.route("/")
         def base_route(request):
             return self._serve_static_file(request, 'static/index.html')
-
-        # Status Check Route (Placeholder)
-        #@self.server.route("/status", methods=[GET])
-        #def update_status(request):
-        #    # Use simplified Response for 200 OK
-        #    return Response(request, "OK")
 
         @self.server.route("/api/status", methods=[GET])
         def api_status(request):
@@ -203,14 +192,12 @@ class LabServer:
                 self.sendDataMongo(url, data_dict)
 
             headers = {"Content-Type": "application/json"}
-
-            # Return the response using the compatible Response constructor
             return Response(request, json.dumps(data_dict), headers=headers)
 
         @self.server.route("/scripts.js")
         def icon_route(request):
             return self._serve_static_file(request, 'static/scripts.js')
-        
+            
         @self.server.route("/simple.html")
         def base_route(request):
             return self._serve_static_file(request, 'static/simple.html')
@@ -227,7 +214,6 @@ class LabServer:
         def favicon_route(request):
             return self._serve_static_file(request, 'static/favicon.ico', content_type="image/x-icon")
 
-        # If using a PNG for an app icon:
         @self.server.route("/icon192.png")
         def icon_route(request):
             return self._serve_static_file(request, 'static/icon192.png', content_type="image/png")
@@ -236,24 +222,17 @@ class LabServer:
         def icon_route(request):
             return self._serve_static_file(request, 'static/icon.png', content_type="image/png")
 
-        # Start the server
         self.server.start(host=self.ip, port=80)
 
     def _serve_static_file(self, request, filepath, content_type=None):
         """Streams a file from flash memory using FileResponse to prevent memory fragmentation."""
         try:
-            # We use os.stat to verify the file exists before returning the response. 
-            # This allows us to catch a missing file and cleanly return a 404.
             os.stat(filepath)
-            
-            # FileResponse automatically handles chunked reading and streaming
             if content_type:
                 return FileResponse(request, filepath, content_type=content_type)
-            
             return FileResponse(request, filepath)
 
         except OSError as e:
-            # Handle File Not Found or other OS errors
             print(f"Error locating or accessing file {filepath}: {e}")
             return Response(request, "File Not Found", status=404)
 
@@ -276,27 +255,20 @@ class LabServer:
             time.sleep(0.01)
             
     def readCert(self, file_path):
-        #file_path = "static/cert/cert.txt"
         certificate_content = ""
-
         try:
-            # Open the file in read mode ('r')
             with open(file_path, 'r') as file:
-                # Read the entire content of the file into the variable
                 certificate_content = file.read()
     
             print("File read successfully.")
-            # Optional: Print the content to verify
-            # print(certiicate_content)
             return certificate_content
 
         except OSError as e:
-            # Handle the case where the file or directory doesn't exist
             print(f"Error opening or reading file at {file_path}: {e}")
             return None
             
     def assembleJson(self):
-        ssensData1 = self.sensors.getData(self.sensors.envSensor1, self.sensors.envSensor1_name, self.sensors.sensor1_correct_temp)
+        sensData1 = self.sensors.getData(self.sensors.envSensor1, self.sensors.envSensor1_name, self.sensors.sensor1_correct_temp)
         sensData2 = self.sensors.getData(self.sensors.envSensor2, self.sensors.envSensor2_name, self.sensors.sensor2_correct_temp)
         sensData3 = self.sensors.getData(self.sensors.envSensor3, self.sensors.envSensor3_name, self.sensors.sensor3_correct_temp)
 
@@ -346,145 +318,3 @@ class LabServer:
             return 0
 
     def reboot(self):
-        time.sleep(2)
-        microcontroller.reset()
-        
-    #####################################################
-    # Submit to Mongo DB
-    # Currently disabled as handled by JS on client side.
-    #####################################################
-    
-    def sendDataMongo(self, url, data):
-        print("-" * 40)
-        print(f"Attempting to POST data to: {url}")
-        print(f"Payload: {json.dumps(data)}")
-        
-        headers = {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json'
-        }
-        
-        if self.mongo_secret_key:
-            headers['Authorization'] = f'Bearer {self.mongo_secret_key}'
-        
-        try:
-            response = self.requests.post(
-                url,
-                json=data,
-                headers=headers,
-                timeout=10 # Set a timeout for the request
-            )
-
-            # Check for success (HTTP 200 series status code)
-            if response.status_code in [200, 201]:
-                print("Data successfully sent!")
-                print("Server Response:", response.text)
-            else:
-                print(f"Server returned status code: {response.status_code}")
-                try:
-                    # Try to print JSON error response if available
-                    print("Server Error Details:", response.json())
-                except:
-                    # Fallback to printing raw text
-                    print("Server Error Text:", response.text)
-
-            response.close() # Crucial: always close the response object
-
-        except Exception as e:
-            print(f"An error occurred during the POST request: {e}")
-    
-############################
-# Control, Sensors
-############################
-class Sensors:
-    def __init__(self, conf):
-        self.sensDev = SensorDevices()
-        self.envSensor1 = None
-        self.envSensor2 = None
-        self.envSensor3 = None
-        self.envSensor1_name = conf.sensor1_name
-        self.envSensor2_name = conf.sensor2_name
-        self.envSensor3_name = conf.sensor3_name
-        self.envSensor1_Pins = conf.sensor1_pins
-        self.envSensor2_pins = conf.sensor2_pins
-        self.envSensor3_pins = conf.sensor3_pins
-        self.sensor1_correct_temp = conf.sensor1_correct_temp
-        self.sensor2_correct_temp = conf.sensor2_correct_temp
-        self.sensor3_correct_temp = conf.sensor3_correct_temp
-        
-        self.envSensor1 = self.sensDev.initSensor(conf.sensor1_name, conf.sensor1_pins)
-        self.envSensor2 = self.sensDev.initSensor(conf.sensor2_name, conf.sensor2_pins)
-        self.envSensor3 = self.sensDev.initSensor(conf.sensor3_name, conf.sensor3_pins)
-
-        if self.envSensor1 != None:
-            if isinstance(self.envSensor1, list):
-                sens1_temp = self.envSensor1[0].temperature
-            else:
-                sens1_temp = self.envSensor1.temperature
-            self.avDeltaT = microcontroller.cpu.temperature - sens1_temp
-        else:
-            self.avDeltaT = 0
-
-        self.numTimes = 1
-        
-    def getData(self, envSensor, envSensor_name, correct_temp):
-        t_cpu = microcontroller.cpu.temperature
-        if not envSensor:
-            print(f"{envSensor_name} not initialized. Using CPU temp with estimated offset.")
-            if self.numTimes > 1 and self.avDeltaT != 0 :
-                return {'temperature': f"{round(t_cpu - self.avDeltaT, 1)}",
-                        'RH': '--',
-                        'pressure': '--',
-                        'HI': '--',
-                        'type': 'CPU adj.'}
-            else:
-                return {'temperature': f"{round(t_cpu, 1)} ",
-                        'RH': '--',
-                        'pressure': '--',
-                        'HI': '--',
-                        'type': 'CPU raw'}
-        try:
-            envSensorData = self.sensDev.getSensorData(envSensor, envSensor_name, correct_temp)
-            delta_t = t_cpu - float(envSensorData['temperature'])
-            if self.numTimes >= 2e+1:
-                self.numTimes = int(1e+1)
-            self.avDeltaT = (self.avDeltaT * self.numTimes + delta_t)/(self.numTimes+1)
-            self.numTimes += 1
-            print(f"Av. CPU/MCP T diff: {self.avDeltaT} {self.numTimes}")
-            time.sleep(0.5)
-            return envSensorData
-        except:
-            print(f"{envSensor_name} not available. Av CPU/MCP T diff: {self.avDeltaT}")
-            time.sleep(0.5)
-            return {'temperature': f"{round(t_cpu-self.avDeltaT, 1)}",
-                    'RH': '--',
-                    'pressure': '--',
-                    'HI': '--',
-                    'type': 'CPU adj'}
-        
-############################
-# Utilities
-############################
-def stringToArray(string):
-    if string is not None:
-        number_strings = (
-        string.replace(" ", "")
-            .split(',')
-        )
-        array = [int(p) for p in number_strings]
-        return array
-    else:
-        print("Warning: Initial string-array not found in settings.toml")
-        return []
-
-############################
-# Main
-############################
-def main():
-    conf = Conf()
-    sensors = Sensors(conf)
-    server = LabServer(sensors)
-
-    server.serve_forever()
-
-main()

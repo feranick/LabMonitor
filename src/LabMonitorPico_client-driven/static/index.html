@@ -83,8 +83,6 @@
     .checkbox-group label {
         margin-right: 10px;
     }
-
-    /* Copied from original for current measurements */
     .two-column-layout {
         display: flex;
         gap: 5px;
@@ -104,7 +102,6 @@
     }
     small { display: block; margin-top: 5px; }
 </style>
-
 </head>
 <body>
 <div class="chart-container">
@@ -200,7 +197,194 @@
 <small><small>Device IP: <span id="ip_address">N/A</span></small></small>
 <small><small>Version: <span id="version">N/A</span></small></small>
 
-<script type="text/javascript" src="scripts.js" ></script>
+<script type="text/javascript">
+//////////////////////////////////////////////
+// Global definitions
+//////////////////////////////////////////////
+let sensorChart;
+let isCollecting = false;
+let hoveredDataIndex = -1;
 
-</body>
-</html>
+// Timeout variables to fix promise pile-up
+let pollingTimer = null;
+
+// DOM Element Cache
+const domCache = {};
+
+//////////////////////////////////////////////
+// This object will store ALL data points
+//////////////////////////////////////////////
+const chartDataStore = {
+    labels: [], 
+    isoLabels: [],  
+    sens1_Temp: [],
+    sens1_RH: [],
+    sens1_HI: [],
+    sens1_WBT: [],
+    sens2_Temp: [],
+    sens2_RH: [],
+    sens3_Temp: [],
+    sens3_RH: [],
+    userComments: []
+};
+
+function getCurrentDateTimeUTC(UTC) {
+    const dateObject = new Date(Math.round(UTC / 1e6));
+    return dateObject.toLocaleString();
+}
+
+function getWebBulbTemp(temp, rh, type) {
+    if (type === 'sensor') {
+        const T = parseFloat(temp);
+        const RH = parseFloat(rh);
+        if (isNaN(T) || isNaN(RH)) return "--";
+        
+        let term1 = T * Math.atan(0.151977 * Math.sqrt(RH + 8.313659));
+        let term2 = Math.atan(T + RH);
+        let term3 = Math.atan(RH - 1.676331);
+        let term4 = 0.00391838 * Math.pow(RH, 1.5) * Math.atan(0.023101 * RH);
+        let term5 = 4.686035;
+        let Tw = term1 + term2 - term3 + term4 - term5;
+        return Tw.toFixed(1);
+    } else {
+        return "--";
+    }
+}
+
+function initChart() {
+    const ctx = document.getElementById('sensorChart').getContext('2d');
+    sensorChart = new Chart(ctx, {
+        type: 'line',
+        data: { labels: [], datasets: [] },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            scales: {
+                x: {
+                    type: 'time',
+                    time: {
+                        unit: 'second',
+                        displayFormats: { second: 'HH:mm:ss' }
+                    },
+                    title: { display: true, text: 'Time' }
+                },
+                y: {
+                    title: { display: true, text: 'Value' },
+                    beginAtZero: false
+                }
+            },
+            onHover: (event, elements, chart) => {
+                if (elements.length > 0) {
+                    hoveredDataIndex = elements[0].index;
+                } else {
+                    hoveredDataIndex = -1;
+                }
+                chart.draw(); 
+            },
+            plugins: {
+                legend: { position: 'top' },
+                tooltip: { enabled: false },
+                zoom: {
+                    zoom: {
+                        wheel: { enabled: false },
+                        pinch: { enabled: false },
+                        drag: {
+                            enabled: true,
+                            borderColor: 'rgba(60, 60, 60, 0.5)',
+                            borderWidth: 1,
+                            backgroundColor: 'rgba(60, 60, 60, 0.2)',
+                            modifierKey: null,
+                        },
+                        mode: 'xy',
+                    },
+                    pan: {
+                        enabled: true,
+                        mode: 'xy',
+                        modifierKey: null,
+                    }
+                },
+            },
+            animation: false
+        }
+    });
+}
+
+async function fetchData(flag) {
+    try {
+        const url = '/api/status?submitMongo='+flag;
+        console.log(`Requesting data with: `+ url);
+        const response = await fetch(url);
+        const data = await response.json();
+        return data;
+    } catch (error) {
+        console.error('Error fetching status:', error);
+        stopInterval();
+        domCache.toggleBtn.textContent = "Start (Error)";
+        domCache.toggleBtn.classList.add("stopped");
+    }
+}
+
+async function updatePlot(flag) {
+    if (!isCollecting  && flag) return;
+
+    if (!domCache.submitMongoCheckbox.checked) {
+        flag = false;
+    }
+        
+    const data = await fetchData(flag);
+    if (!data) return;
+
+    const timestamp = new Date(Math.round(data.UTC / 1e6));
+
+    const datetime = getCurrentDateTimeUTC(data.UTC);
+    const s1_Temp = parseFloat(data.sens1_Temp) || null;
+    const s1_RH = parseFloat(data.sens1_RH) || null;
+    const s1_HI = parseFloat(data.sens1_HI) || null;
+    const s2_Temp = parseFloat(data.sens2_Temp) || null;
+    const s2_RH = parseFloat(data.sens2_RH) || null;
+    const s3_Temp = parseFloat(data.sens3_Temp) || null;
+    const s3_RH = parseFloat(data.sens3_RH) || null;
+    const s1_WBT_string = getWebBulbTemp(data.sens1_Temp, data.sens1_RH, data.sens1_type);
+    const s1_WBT = parseFloat(s1_WBT_string) || null;
+    
+    let userComment = "No comment"; 
+    if (domCache.userComment && domCache.userComment.value) {
+        userComment = domCache.userComment.value.trim();
+        if (userComment === "") userComment = "No comment";
+    }
+            
+    // Update Cached DOM
+    domCache.deviceName.textContent = data.device_name;
+    domCache.datetimeCurrent.textContent = datetime;
+    domCache.sens1Temp.textContent = data.sens1_Temp + " \u00B0C";
+    domCache.sens1Temp.style.color = (data.sens1_type != "sensor") ? "red" : "#00008B";
+    domCache.sens1HI.textContent = data.sens1_HI + " \u00B0C";
+    domCache.sens1HI.style.color = (data.sens1_type != "sensor") ? "red" : "#00008B";
+    domCache.sens1RH.textContent = data.sens1_RH + " %";
+    domCache.sens1WBT.textContent = s1_WBT_string + " \u00B0C"; 
+    domCache.sens2Temp.textContent = data.sens2_Temp + " \u00B0C";
+    domCache.sens2Temp.style.color = (data.sens2_type != "sensor") ? "red" : "#00008B";
+    domCache.sens3Temp.textContent = data.sens3_Temp + " \u00B0C";
+    domCache.sens3Temp.style.color = (data.sens3_type != "sensor") ? "red" : "#00008B";
+    domCache.ipAddress.textContent = data.ip;
+    domCache.version.textContent = data.version;
+
+    if (flag) { 
+        chartDataStore.labels.push(timestamp);
+        chartDataStore.isoLabels.push(timestamp.toISOString());
+        chartDataStore.sens1_Temp.push(s1_Temp);
+        chartDataStore.sens1_RH.push(s1_RH);
+        chartDataStore.sens1_HI.push(s1_HI);
+        chartDataStore.sens1_WBT.push(s1_WBT);
+        chartDataStore.sens2_Temp.push(s2_Temp);
+        chartDataStore.sens2_RH.push(s2_RH);
+        chartDataStore.sens3_Temp.push(s3_Temp);
+        chartDataStore.sens3_RH.push(s3_RH);
+        chartDataStore.userComments.push(userComment);
+
+        sensorChart.data.labels.push(timestamp);
+        sensorChart.data.datasets.forEach(dataset => {
+            const key = dataset.label;
+            if (key === 'sens1_Temp') dataset.data.push(s1_Temp);
+            if (key === 'sens1_RH') dataset.data.push(s1_RH);
+            if
