@@ -1,4 +1,4 @@
-let version = "2026.07.01.2";
+let version = "2026.07.01.3";
 let sensorChart;
 let hoveredDataIndex = -1;
 let nameSelIndex="LabMonitorViewer_device_dropdown";
@@ -20,12 +20,15 @@ const chartDataStore = {
     userComments: []
 };
 
-// Return a numeric value only for genuine sensor readings. If the stored
-// sens*_type indicates a CPU fallback, return null so old fallback spikes
-// are suppressed. parseFloat(x)||null would wrongly drop a legitimate 0,
-// so use isFinite instead.
+// Suppress ONLY CPU-fallback readings, whose type labels all begin with
+// "CPU" ("CPU raw", "CPU adj", "CPU adj."). Any other type is a genuine
+// reading and is kept — including temperature-only probes that report a
+// type string other than the literal "sensor". parseFloat(x)||null would
+// wrongly drop a legitimate 0, so use isFinite instead.
 function sensorVal(raw, type) {
-    if (type !== undefined && type !== null && type !== "sensor") return null;
+    if (typeof type === 'string' && type.trim().toUpperCase().startsWith('CPU')) {
+        return null;
+    }
     const v = parseFloat(raw);
     return Number.isFinite(v) ? v : null;
 }
