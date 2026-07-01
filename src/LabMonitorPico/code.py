@@ -18,6 +18,7 @@ import digitalio
 import socketpool
 import ssl
 import json
+import struct
 
 import adafruit_requests
 from adafruit_httpserver import Server, MIMETypes, Response, GET, POST, JSONResponse, FileResponse
@@ -56,10 +57,13 @@ if supervisor.runtime.safe_mode_reason is not None:
 # NVM layout:
 #   byte 0            : acquisition flag (0=stopped, 1=running, else=default running)
 #   byte 1            : user_comment length
-#   bytes 2..2+len    : user_comment (UTF-8)
+#   bytes 2..201      : user_comment (UTF-8, up to _COMMENT_MAX)
+#   bytes 202..205    : acquisition interval, seconds (little-endian float32)
 _COMMENT_LEN_ADDR  = 1
 _COMMENT_DATA_ADDR = 2
-_COMMENT_MAX       = 200   # keep < len(microcontroller.nvm) - 2
+_COMMENT_MAX       = 200   # keep _INTERVAL_ADDR + 4 < len(microcontroller.nvm)
+_INTERVAL_ADDR     = _COMMENT_DATA_ADDR + _COMMENT_MAX   # 202
+_INTERVAL_MAX      = 86400.0
 
 def load_acq_state():
     try:
@@ -101,6 +105,22 @@ def save_user_comment(comment):
             microcontroller.nvm[_COMMENT_DATA_ADDR:_COMMENT_DATA_ADDR + len(raw)] = raw
     except Exception as e:
         print(f"Could not persist user_comment: {e}")
+
+def load_interval():
+    try:
+        raw = microcontroller.nvm[_INTERVAL_ADDR:_INTERVAL_ADDR + 4]
+        v = struct.unpack("<f", raw)[0]
+    except Exception:
+        return 30.0
+    if 1.0 <= v <= _INTERVAL_MAX:   # rejects NaN / inf / fresh-flash / garbage
+        return float(v)
+    return 30.0
+
+def save_interval(seconds):
+    try:
+        microcontroller.nvm[_INTERVAL_ADDR:_INTERVAL_ADDR + 4] = struct.pack("<f", float(seconds))
+    except Exception as e:
+        print(f"Could not persist interval: {e}")
 
 ############################
 # User variable definitions
@@ -154,10 +174,11 @@ class LabServer:
         self.user_comment = load_user_comment()
         
         # Initialize timing for the data loop and restore persisted state
-        global last_acquisition_time, is_acquisition_running
+        global last_acquisition_time, is_acquisition_running, ACQUISITION_INTERVAL
         last_acquisition_time = time.monotonic_ns()
         is_acquisition_running = load_acq_state()
-        print(f"Restored acquisition state: {'running' if is_acquisition_running else 'stopped'}")
+        ACQUISITION_INTERVAL = load_interval()
+        print(f"Restored acquisition state: {'running' if is_acquisition_running else 'stopped'}, interval: {ACQUISITION_INTERVAL}s")
         
         try:
             self.mongo_url = os.getenv("mongo_url")
@@ -256,6 +277,7 @@ class LabServer:
                 
                 if new_interval is not None and isinstance(new_interval, (int, float)) and new_interval >= 1:
                     ACQUISITION_INTERVAL = float(new_interval)
+                    save_interval(ACQUISITION_INTERVAL)
                     print(f"Acquisition interval updated to: {ACQUISITION_INTERVAL}s")
 
                 if command == "start":
