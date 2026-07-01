@@ -1,5 +1,5 @@
 # **********************************************
-# * LabMonitor - Rasperry Pico W
+# * LabMonitor - Rasperry Pico W/2W
 # * Pico driven
 # * v2026.07.01.1
 # * By: Nicola Ferralis <ferralis@mit.edu>
@@ -26,8 +26,8 @@ import adafruit_ntp
 from libSensors import SensorDevices, overclock
 
 is_acquisition_running = False
-last_acquisition_time = 0
-ACQUISITION_INTERVAL = 30.0
+last_acquisition_time = 0          # int nanoseconds (time.monotonic_ns)
+ACQUISITION_INTERVAL = 30.0        # seconds; converted to ns at compare time
 
 ############################
 # Initial WiFi/Safe Mode Check
@@ -49,6 +49,58 @@ if supervisor.runtime.safe_mode_reason is not None:
         print("Initial WiFi radio toggle complete.")
     except Exception as e:
         print(f"Error during initial WiFi radio toggle: {e}")
+
+############################
+# Persistent state (NVM) — survives reset / power cycle
+############################
+# NVM layout:
+#   byte 0            : acquisition flag (0=stopped, 1=running, else=default running)
+#   byte 1            : user_comment length
+#   bytes 2..2+len    : user_comment (UTF-8)
+_COMMENT_LEN_ADDR  = 1
+_COMMENT_DATA_ADDR = 2
+_COMMENT_MAX       = 200   # keep < len(microcontroller.nvm) - 2
+
+def load_acq_state():
+    try:
+        v = microcontroller.nvm[0]
+    except Exception:
+        return True                 # NVM unavailable -> default to running
+    if v == 0:
+        return False
+    if v == 1:
+        return True
+    return True                     # 0xFF fresh flash / garbage -> default running
+
+def save_acq_state(running):
+    try:
+        microcontroller.nvm[0:1] = bytes([1 if running else 0])
+    except Exception as e:
+        print(f"Could not persist acquisition state: {e}")
+
+def load_user_comment():
+    try:
+        n = microcontroller.nvm[_COMMENT_LEN_ADDR]
+    except Exception:
+        return ""
+    if n == 0 or n == 0xFF or n > _COMMENT_MAX:   # empty / fresh flash / garbage
+        return ""
+    try:
+        raw = microcontroller.nvm[_COMMENT_DATA_ADDR:_COMMENT_DATA_ADDR + n]
+        return raw.decode("utf-8")
+    except Exception:
+        return ""
+
+def save_user_comment(comment):
+    if comment is None:
+        comment = ""
+    try:
+        raw = comment.encode("utf-8")[:_COMMENT_MAX]
+        microcontroller.nvm[_COMMENT_LEN_ADDR:_COMMENT_LEN_ADDR + 1] = bytes([len(raw)])
+        if raw:
+            microcontroller.nvm[_COMMENT_DATA_ADDR:_COMMENT_DATA_ADDR + len(raw)] = raw
+    except Exception as e:
+        print(f"Could not persist user_comment: {e}")
 
 ############################
 # User variable definitions
@@ -99,9 +151,9 @@ class LabServer:
         self.ntp = None
         self.server = None
         self.ip = "0.0.0.0"
-        self.user_comment = ""
+        self.user_comment = load_user_comment()
         
-        # Initialize timing for the data loop
+        # Initialize timing for the data loop and restore persisted state
         global last_acquisition_time, is_acquisition_running
         last_acquisition_time = time.monotonic_ns()
         is_acquisition_running = load_acq_state()
@@ -195,7 +247,12 @@ class LabServer:
                 data = request.json()
                 command = data.get("command", "").lower()
                 new_interval = data.get("interval")
-                self.user_comment = data.get("user_comment")
+
+                # Only touch the comment if the client actually sent one, so a
+                # bare {"command": "stop"} can't clobber it to None.
+                if "user_comment" in data:
+                    self.user_comment = data.get("user_comment") or ""
+                    save_user_comment(self.user_comment)
                 
                 if new_interval is not None and isinstance(new_interval, (int, float)) and new_interval >= 1:
                     ACQUISITION_INTERVAL = float(new_interval)
@@ -208,7 +265,7 @@ class LabServer:
                         save_acq_state(True)
                         print("Acquisition: STARTED")
                     message = "Acquisition is now running."
-
+                    
                 elif command == "stop":
                     is_acquisition_running = False
                     save_acq_state(False)
@@ -317,12 +374,15 @@ class LabServer:
                 if (current_time - last_acquisition_time) >= interval_ns:
                     print(f"\nScheduled acquisition triggered at {current_time}")
                     print("-" * 40)
+                    
                     data_dict = self.assembleJson()
+                    
                     if self.is_pico_submit_mongo.lower() == 'true':
                         print("\nSubmitting scheduled data to MongoDB")
                         url = self.mongo_url + "/LabMonitorDB/api/submit-sensor-data"
                         self.sendDataMongo(url, data_dict)
-                    last_acquisition_time = current_time
+                    
+                    last_acquisition_time = current_time 
 
             time.sleep(0.01)
             
@@ -517,27 +577,6 @@ def stringToArray(string):
     else:
         print("Warning: Initial string-array not found in settings.toml")
         return []
-        
-############################
-# Persistent acquisition state (survives reset)
-############################
-# NVM byte 0:  0 = stopped, 1 = running, anything else (0xFF fresh flash) = default
-def load_acq_state():
-    try:
-        v = microcontroller.nvm[0]
-    except Exception:
-        return True                 # NVM unavailable -> default to running
-    if v == 0:
-        return False
-    if v == 1:
-        return True
-    return True                     # fresh/garbage -> default running
-
-def save_acq_state(running):
-    try:
-        microcontroller.nvm[0:1] = bytes([1 if running else 0])
-    except Exception as e:
-        print(f"Could not persist acquisition state: {e}")
 
 ############################
 # Main
