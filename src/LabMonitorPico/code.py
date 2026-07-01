@@ -1,11 +1,11 @@
 # **********************************************
 # * LabMonitor - Rasperry Pico W
 # * Pico driven
-# * v2026.03.19.1
+# * v2026.07.01.1
 # * By: Nicola Ferralis <ferralis@mit.edu>
 # **********************************************
 
-version = "2026.03.19.1"
+version = "2026.07.01.1"
 
 import wifi
 import time
@@ -26,7 +26,7 @@ import adafruit_ntp
 from libSensors import SensorDevices, overclock
 
 is_acquisition_running = False
-last_acquisition_time = 0.0
+last_acquisition_time = 0
 ACQUISITION_INTERVAL = 30.0
 
 ############################
@@ -102,8 +102,10 @@ class LabServer:
         self.user_comment = ""
         
         # Initialize timing for the data loop
-        global last_acquisition_time
-        last_acquisition_time = time.monotonic()
+        global last_acquisition_time, is_acquisition_running
+        last_acquisition_time = time.monotonic_ns()
+        is_acquisition_running = load_acq_state()
+        print(f"Restored acquisition state: {'running' if is_acquisition_running else 'stopped'}")
         
         try:
             self.mongo_url = os.getenv("mongo_url")
@@ -202,12 +204,14 @@ class LabServer:
                 if command == "start":
                     if not is_acquisition_running:
                         is_acquisition_running = True
-                        last_acquisition_time = time.monotonic() 
+                        last_acquisition_time = time.monotonic_ns()
+                        save_acq_state(True)
                         print("Acquisition: STARTED")
                     message = "Acquisition is now running."
-                    
+
                 elif command == "stop":
                     is_acquisition_running = False
+                    save_acq_state(False)
                     print("Acquisition: STOPPED")
                     message = "Acquisition is now stopped."
                     
@@ -308,19 +312,17 @@ class LabServer:
                 print(f"Unexpected critical error in server poll: {e}")
 
             if is_acquisition_running:
-                current_time = time.monotonic()
-                if (current_time - last_acquisition_time) >= ACQUISITION_INTERVAL:
-                    print(f"\nScheduled acquisition triggered at {current_time:.2f}")
+                current_time = time.monotonic_ns()
+                interval_ns = int(ACQUISITION_INTERVAL * 1_000_000_000)
+                if (current_time - last_acquisition_time) >= interval_ns:
+                    print(f"\nScheduled acquisition triggered at {current_time}")
                     print("-" * 40)
-                    
                     data_dict = self.assembleJson()
-                    
                     if self.is_pico_submit_mongo.lower() == 'true':
                         print("\nSubmitting scheduled data to MongoDB")
                         url = self.mongo_url + "/LabMonitorDB/api/submit-sensor-data"
                         self.sendDataMongo(url, data_dict)
-                    
-                    last_acquisition_time = current_time 
+                    last_acquisition_time = current_time
 
             time.sleep(0.01)
             
@@ -515,6 +517,27 @@ def stringToArray(string):
     else:
         print("Warning: Initial string-array not found in settings.toml")
         return []
+        
+############################
+# Persistent acquisition state (survives reset)
+############################
+# NVM byte 0:  0 = stopped, 1 = running, anything else (0xFF fresh flash) = default
+def load_acq_state():
+    try:
+        v = microcontroller.nvm[0]
+    except Exception:
+        return True                 # NVM unavailable -> default to running
+    if v == 0:
+        return False
+    if v == 1:
+        return True
+    return True                     # fresh/garbage -> default running
+
+def save_acq_state(running):
+    try:
+        microcontroller.nvm[0:1] = bytes([1 if running else 0])
+    except Exception as e:
+        print(f"Could not persist acquisition state: {e}")
 
 ############################
 # Main
