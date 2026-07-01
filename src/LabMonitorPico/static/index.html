@@ -646,7 +646,18 @@ function cleanAndAugmentData(data) {
     const cleanData = { ...data };
     const EXCLUDED_KEYS = ["mongo_url"];
     EXCLUDED_KEYS.forEach(key => delete cleanData[key]);
-    
+
+    // Null out CPU-fallback readings so they never reach the database.
+    // sens*_type stays in the record to show why values are null.
+    [1, 2, 3].forEach(i => {
+        if (cleanData[`sens${i}_type`] !== "sensor") {
+            cleanData[`sens${i}_Temp`] = null;
+            cleanData[`sens${i}_RH`] = null;
+            cleanData[`sens${i}_P`] = null;
+            cleanData[`sens${i}_HI`] = null;
+        }
+    });
+
     const comment = domCache.userComment.value.trim();
     cleanData['user_comment'] = comment ? comment : "";
     cleanData['client_submission_time'] = Date.now();

@@ -1,11 +1,11 @@
 # **********************************************
 # * LabMonitor - Rasperry Pico W/2W
 # * Pico driven
-# * v2026.07.01.1
+# * v2026.07.01.2
 # * By: Nicola Ferralis <ferralis@mit.edu>
 # **********************************************
 
-version = "2026.07.01.1"
+version = "2026.07.01.2"
 
 import wifi
 import time
@@ -480,7 +480,21 @@ class LabServer:
         time.sleep(2)
         microcontroller.reset()
         
+    def filterCpuReadings(self, data):
+        """Null out values for any sensor whose reading fell back to a
+        CPU-based estimate, so fallback spikes never reach the database.
+        The sens*_type field is kept so the record shows why values are null."""
+        clean = dict(data)
+        for i in (1, 2, 3):
+            if clean.get(f"sens{i}_type") != "sensor":
+                clean[f"sens{i}_Temp"] = None
+                clean[f"sens{i}_RH"] = None
+                clean[f"sens{i}_P"] = None
+                clean[f"sens{i}_HI"] = None
+        return clean
+
     def sendDataMongo(self, url, data):
+        data = self.filterCpuReadings(data)
         print("-" * 40)
         print(f"Attempting to POST data to: {url}")
         print(f"Payload: {json.dumps(data)}")
