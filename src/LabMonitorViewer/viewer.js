@@ -121,11 +121,14 @@ async function fetchAndDisplayData() {
         return;
     }
 
-    // datetime-local values are local wall-clock time. new Date(str) parses
-    // them as local and toISOString() converts to correct UTC. (Appending 'Z'
-    // here would misread local time as UTC and shift the window.)
-    const startDate = new Date(startInput).toISOString();
-    const endDate = new Date(endInput).toISOString();
+    // NOTE: the /get-data backend filters on naive (local wall-clock)
+    // timestamps, NOT true UTC — even though it returns point.UTC for
+    // plotting. So the query must carry the local wall-clock digits.
+    // Appending 'Z' keeps those digits intact through toISOString().
+    // Do NOT "correct" this to new Date(startInput).toISOString(): that
+    // shifts the window by the UTC offset and drops recent data.
+    const startDate = new Date(startInput + 'Z').toISOString();
+    const endDate = new Date(endInput + 'Z').toISOString();
     
     var API_ENDPOINT = `/LabMonitorDB/api/get-data?start=${encodeURIComponent(startDate)}&end=${encodeURIComponent(endDate)}`;
     
