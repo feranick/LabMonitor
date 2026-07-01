@@ -648,9 +648,12 @@ function cleanAndAugmentData(data) {
     EXCLUDED_KEYS.forEach(key => delete cleanData[key]);
 
     // Null out CPU-fallback readings so they never reach the database.
-    // sens*_type stays in the record to show why values are null.
+    // Only CPU-fallback type labels (all begin with "CPU") are suppressed;
+    // genuine readings are kept even if their type isn't the literal
+    // "sensor". sens*_type stays in the record to show why values are null.
     [1, 2, 3].forEach(i => {
-        if (cleanData[`sens${i}_type`] !== "sensor") {
+        const t = cleanData[`sens${i}_type`];
+        if (typeof t === 'string' && t.trim().toUpperCase().startsWith('CPU')) {
             cleanData[`sens${i}_Temp`] = null;
             cleanData[`sens${i}_RH`] = null;
             cleanData[`sens${i}_P`] = null;
