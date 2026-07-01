@@ -1,9 +1,9 @@
-let version = "2025.12.04.1";
+let version = "2026.07.01.2";
 let sensorChart;
 let hoveredDataIndex = -1;
 let nameSelIndex="LabMonitorViewer_device_dropdown";
 let timeSelectedValue = 1;
-let timeSelectedIndex = 3;
+let timeSelectedIndex = 0;   // must correspond to timeSelectedValue's option
 
 // This object will store ALL data points, just like before.
 const chartDataStore = {
@@ -11,6 +11,7 @@ const chartDataStore = {
     isoLabels: [],   // Array of ISO strings (for CSV)
     sens1_Temp: [],
     sens1_RH: [],
+    sens1_HI: [],
     sens1_WBT: [],
     sens2_Temp: [],
     sens2_RH: [],
@@ -18,6 +19,16 @@ const chartDataStore = {
     sens3_RH: [],
     userComments: []
 };
+
+// Return a numeric value only for genuine sensor readings. If the stored
+// sens*_type indicates a CPU fallback, return null so old fallback spikes
+// are suppressed. parseFloat(x)||null would wrongly drop a legitimate 0,
+// so use isFinite instead.
+function sensorVal(raw, type) {
+    if (type !== undefined && type !== null && type !== "sensor") return null;
+    const v = parseFloat(raw);
+    return Number.isFinite(v) ? v : null;
+}
 
 // --- Chart Initialization ---
 function initChart() {
@@ -95,11 +106,6 @@ function initChart() {
                     }
                 },
             },
-            scales: {
-                x: {
-                    type: 'time',
-                }
-            },
             animation: false
         }
     });
@@ -115,11 +121,13 @@ async function fetchAndDisplayData() {
         return;
     }
 
-    // Convert local datetime-local input to ISO strings
-    const startDate = new Date(startInput + 'Z').toISOString();
-    const endDate = new Date(endInput + 'Z').toISOString();
+    // datetime-local values are local wall-clock time. new Date(str) parses
+    // them as local and toISOString() converts to correct UTC. (Appending 'Z'
+    // here would misread local time as UTC and shift the window.)
+    const startDate = new Date(startInput).toISOString();
+    const endDate = new Date(endInput).toISOString();
     
-    var API_ENDPOINT = `/LabMonitorDB/api/get-data?start=${startDate}&end=${endDate}`;
+    var API_ENDPOINT = `/LabMonitorDB/api/get-data?start=${encodeURIComponent(startDate)}&end=${encodeURIComponent(endDate)}`;
     
     const devDropdown = document.getElementById('deviceDropdown');
     const devSelectedValue = devDropdown.value;
@@ -129,7 +137,7 @@ async function fetchAndDisplayData() {
     console.log("Display time Period - fetchAndDisplayData: "+ timeSelectedValue);
     
     if (devSelectedValue != "All") {
-        API_ENDPOINT += `&device_name=${devSelectedValue}`;
+        API_ENDPOINT += `&device_name=${encodeURIComponent(devSelectedValue)}`;
         }
             
     console.log(`Fetching data from: ${API_ENDPOINT}`);
@@ -150,20 +158,21 @@ async function fetchAndDisplayData() {
 
         // 2. Loop through new data and populate the store
         dataArray.forEach(point => {
-            //const timestamp = new Date(point.datetime_utc_pico);
             const timestamp = new Date(Math.round(point.UTC / 1e6));
             const s1_WBT_string = getWebBulbTemp(point.sens1_Temp, point.sens1_RH, point.sens1_type);
 
             chartDataStore.labels.push(timestamp);
-            chartDataStore.isoLabels.push(point.datetime_utc_pico);
-            chartDataStore.sens1_Temp.push(parseFloat(point.sens1_Temp) || null);
-            chartDataStore.sens1_RH.push(parseFloat(point.sens1_RH) || null);
-            chartDataStore.sens1_HI.push(parseFloat(point.sens1_HI) || null);
-            chartDataStore.sens1_WBT.push(parseFloat(s1_WBT_string) || null);
-            chartDataStore.sens2_Temp.push(parseFloat(point.sens2_Temp) || null);
-            chartDataStore.sens2_RH.push(parseFloat(point.sens2_RH) || null);
-            chartDataStore.sens3_Temp.push(parseFloat(point.sens3_Temp) || null);
-            chartDataStore.sens3_RH.push(parseFloat(point.sens3_RH) || null);
+            // Derive the ISO label from UTC so CSV timestamps and export
+            // filenames are always valid, regardless of stored field names.
+            chartDataStore.isoLabels.push(timestamp.toISOString());
+            chartDataStore.sens1_Temp.push(sensorVal(point.sens1_Temp, point.sens1_type));
+            chartDataStore.sens1_RH.push(sensorVal(point.sens1_RH, point.sens1_type));
+            chartDataStore.sens1_HI.push(sensorVal(point.sens1_HI, point.sens1_type));
+            chartDataStore.sens1_WBT.push(sensorVal(s1_WBT_string, point.sens1_type));
+            chartDataStore.sens2_Temp.push(sensorVal(point.sens2_Temp, point.sens2_type));
+            chartDataStore.sens2_RH.push(sensorVal(point.sens2_RH, point.sens2_type));
+            chartDataStore.sens3_Temp.push(sensorVal(point.sens3_Temp, point.sens3_type));
+            chartDataStore.sens3_RH.push(sensorVal(point.sens3_RH, point.sens3_type));
             chartDataStore.userComments.push(point.user_comment || "");
         });
 
@@ -226,7 +235,7 @@ async function setDeviceNames() {
     });
     
     // Process cookie for device dropdown
-    selIndex = deviceDropdown.selectedIndex;
+    let selIndex = deviceDropdown.selectedIndex;
 
     let indexToSet = 0; // Default to the first option
     const devCookieValue = getCookie("nameSelIndex");
@@ -290,24 +299,34 @@ function clearPlot() {
 
 // --- Export Functions ---
 function exportToPng() {
-    const link = document.createElement('a');
-    sensorChart.options.animation = false;
+    // Add a title for the exported image
     sensorChart.options.plugins.title = { display: true, text: 'LabMonitor Sensor Data' };
-    sensorChart.update();
-    sensorChart.options.plugins.backgroundColor = 'white';
+    sensorChart.update('none');
 
-    link.href = sensorChart.toBase64Image();
-    link.download = chartDataStore.isoLabels.at(-1)+'_sensor-plot.png';
+    // Composite the (transparent) chart canvas onto a white background,
+    // since toBase64Image() otherwise yields a transparent PNG.
+    const src = sensorChart.canvas;
+    const tmp = document.createElement('canvas');
+    tmp.width = src.width;
+    tmp.height = src.height;
+    const tctx = tmp.getContext('2d');
+    tctx.fillStyle = 'white';
+    tctx.fillRect(0, 0, tmp.width, tmp.height);
+    tctx.drawImage(src, 0, 0);
+
+    const link = document.createElement('a');
+    link.href = tmp.toDataURL('image/png');
+    link.download = (chartDataStore.isoLabels.at(-1) || 'export') + '_sensor-plot.png';
     link.click();
 
+    // Restore on-screen state
     sensorChart.options.plugins.title = { display: false };
-    sensorChart.options.plugins.backgroundColor = null;
-    sensorChart.update();
+    sensorChart.update('none');
 }
 
 function exportToCsv() {
     const headers = ['timestamp', 'sens1_Temp', 'sens2_Temp', 'sens1_RH', 'sens1_WBT', 'sens1_HI', 'sens2_RH', 'sens3_Temp', 'sens3_RH'];
-    let csvContent = "data:text/csv;charset=utf-8," + headers.join(',') + "\n";
+    let csvContent = headers.join(',') + "\n";
 
     for (let i = 0; i < chartDataStore.isoLabels.length; i++) {
         const row = [
@@ -324,13 +343,17 @@ function exportToCsv() {
         csvContent += row.join(',') + "\n";
     }
 
-    const encodedUri = encodeURI(csvContent);
+    // Use a Blob rather than a data: URI so large exports aren't capped by
+    // URL length limits.
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', chartDataStore.isoLabels.at(-1)+'_sensor-data.csv');
+    link.setAttribute('href', url);
+    link.setAttribute('download', (chartDataStore.isoLabels.at(-1) || 'export') + '_sensor-data.csv');
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
 }
 
 // Function to toggle between Pan and Box Zoom modes
@@ -387,11 +410,11 @@ function setCurrentEndDateTime() {
 }
 
 function setStartDateTime() {
-    // --- Set default date range (e.g., last 24 hours) ---
+    // --- Set default date range based on selected period ---
     const endDate = new Date();
     const startDate = new Date();
-    //startDate.setDate(endDate.getDate() - 1); // 24 hours ago
-    startDate.setHours(endDate.getHours() - timeSelectedValue); // 6 hours ago
+    const hrs = parseInt(timeSelectedValue, 10) || 1;   // tolerate "3 " etc.
+    startDate.setHours(endDate.getHours() - hrs);
 
     // Format for datetime-local input (YYYY-MM-DDTHH:MM)
     const toLocalISOString = (date) => {
@@ -430,7 +453,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const canvas = document.getElementById('sensorChart');
     
     // --- Initialize device Dropdown ---
-    setDeviceNames();
+    setDeviceNames().catch(err => console.error('Failed to load device list:', err));
     deviceDropdown.addEventListener('change', function() {
         setCookie("nameSelIndex", this.selectedIndex ,1000);
         console.log(nameSelIndex+"  "+ this.selectedIndex);
@@ -443,7 +466,6 @@ document.addEventListener('DOMContentLoaded', () => {
         timeSelectedIndex = this.selectedIndex;
         setCookie("timeSelectedValue", this.value ,1000);
         setCookie("timeSelectedIndex", this.selectedIndex ,1000);
-        setStartDateTime();
         setStartDateTime();
     });
     
@@ -612,13 +634,16 @@ function getWebBulbTemp(temp, rh, type) {
 
 // Cookie Utilities
 function getCookie(name) {
-  return (name = (document.cookie + ';').match(new RegExp(name + '=.*;'))) && name[0].split(/=|;/)[1];
+  const escaped = name.replace(/([.*+?^${}()|[\]\\])/g, '\\$1');
+  const match = document.cookie.match(new RegExp('(?:^|; )' + escaped + '=([^;]*)'));
+  return match ? decodeURIComponent(match[1]) : null;
 }
 
 function setCookie(name, value, days) {
   var e = new Date;
   e.setDate(e.getDate() + (days || 365));
-  document.cookie = name + '=' + value + ';expires=' + e.toUTCString() + ';path=/;domain=.' + document.domain;
+  document.cookie = name + '=' + encodeURIComponent(value) +
+    ';expires=' + e.toUTCString() + ';path=/';
 }
 
 function cookieExists(cookieName) {
