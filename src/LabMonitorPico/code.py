@@ -1,11 +1,11 @@
 # **********************************************
-# * LabMonitor - Rasperry Pico W/2W
+# * LabMonitor - Rasperry Pico W
 # * Pico driven
-# * v2026.07.01.2
+# * v2026.07.01.7
 # * By: Nicola Ferralis <ferralis@mit.edu>
 # **********************************************
 
-version = "2026.07.01.2"
+version = "2026.07.01.7"
 
 import wifi
 import time
@@ -483,10 +483,14 @@ class LabServer:
     def filterCpuReadings(self, data):
         """Null out values for any sensor whose reading fell back to a
         CPU-based estimate, so fallback spikes never reach the database.
-        The sens*_type field is kept so the record shows why values are null."""
+        Only CPU-fallback type labels ("CPU raw", "CPU adj", "CPU adj.")
+        are suppressed; genuine readings are kept even if their type isn't
+        the literal "sensor" (e.g. temperature-only probes). The sens*_type
+        field is kept so the record shows why values are null."""
         clean = dict(data)
         for i in (1, 2, 3):
-            if clean.get(f"sens{i}_type") != "sensor":
+            t = clean.get(f"sens{i}_type")
+            if isinstance(t, str) and t.strip().upper().startswith("CPU"):
                 clean[f"sens{i}_Temp"] = None
                 clean[f"sens{i}_RH"] = None
                 clean[f"sens{i}_P"] = None
