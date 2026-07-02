@@ -1,9 +1,9 @@
-let version = "2025.12.04.1";
+let version = "2026.07.01.7";
 let sensorChart;
 let hoveredDataIndex = -1;
 let nameSelIndex="LabMonitorViewer_device_dropdown";
 let timeSelectedValue = 1;
-let timeSelectedIndex = 3;
+let timeSelectedIndex = 0;   // must correspond to timeSelectedValue's option
 
 // This object will store ALL data points, just like before.
 const chartDataStore = {
@@ -11,6 +11,7 @@ const chartDataStore = {
     isoLabels: [],   // Array of ISO strings (for CSV)
     sens1_Temp: [],
     sens1_RH: [],
+    sens1_HI: [],
     sens1_WBT: [],
     sens2_Temp: [],
     sens2_RH: [],
@@ -95,11 +96,6 @@ function initChart() {
                     }
                 },
             },
-            scales: {
-                x: {
-                    type: 'time',
-                }
-            },
             animation: false
         }
     });
@@ -155,7 +151,9 @@ async function fetchAndDisplayData() {
             const s1_WBT_string = getWebBulbTemp(point.sens1_Temp, point.sens1_RH, point.sens1_type);
 
             chartDataStore.labels.push(timestamp);
-            chartDataStore.isoLabels.push(point.datetime_utc_pico);
+            // Derive the ISO label from UTC so CSV timestamps and export
+            // filenames are always valid regardless of stored field names.
+            chartDataStore.isoLabels.push(timestamp.toISOString());
             chartDataStore.sens1_Temp.push(parseFloat(point.sens1_Temp) || null);
             chartDataStore.sens1_RH.push(parseFloat(point.sens1_RH) || null);
             chartDataStore.sens1_HI.push(parseFloat(point.sens1_HI) || null);
@@ -290,19 +288,29 @@ function clearPlot() {
 
 // --- Export Functions ---
 function exportToPng() {
-    const link = document.createElement('a');
+    // Add a title for the exported image
     sensorChart.options.animation = false;
     sensorChart.options.plugins.title = { display: true, text: 'LabMonitor Sensor Data' };
-    sensorChart.update();
-    sensorChart.options.plugins.backgroundColor = 'white';
+    sensorChart.update('none');
 
-    link.href = sensorChart.toBase64Image();
-    link.download = chartDataStore.isoLabels.at(-1)+'_sensor-plot.png';
+    // Composite the (transparent) chart canvas onto a white background;
+    // toBase64Image() alone yields a transparent PNG.
+    const src = sensorChart.canvas;
+    const tmp = document.createElement('canvas');
+    tmp.width = src.width;
+    tmp.height = src.height;
+    const tctx = tmp.getContext('2d');
+    tctx.fillStyle = 'white';
+    tctx.fillRect(0, 0, tmp.width, tmp.height);
+    tctx.drawImage(src, 0, 0);
+
+    const link = document.createElement('a');
+    link.href = tmp.toDataURL('image/png');
+    link.download = (chartDataStore.isoLabels.at(-1) || 'export') + '_sensor-plot.png';
     link.click();
 
     sensorChart.options.plugins.title = { display: false };
-    sensorChart.options.plugins.backgroundColor = null;
-    sensorChart.update();
+    sensorChart.update('none');
 }
 
 function exportToCsv() {
@@ -430,7 +438,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const canvas = document.getElementById('sensorChart');
     
     // --- Initialize device Dropdown ---
-    setDeviceNames();
+    setDeviceNames().catch(err => console.error('Failed to load device list:', err));
     deviceDropdown.addEventListener('change', function() {
         setCookie("nameSelIndex", this.selectedIndex ,1000);
         console.log(nameSelIndex+"  "+ this.selectedIndex);
@@ -443,7 +451,6 @@ document.addEventListener('DOMContentLoaded', () => {
         timeSelectedIndex = this.selectedIndex;
         setCookie("timeSelectedValue", this.value ,1000);
         setCookie("timeSelectedIndex", this.selectedIndex ,1000);
-        setStartDateTime();
         setStartDateTime();
     });
     
