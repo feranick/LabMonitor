@@ -1,4 +1,4 @@
-let version = "2026.07.02.1";
+let version = "2026.07.03.1";
 let sensorChart;
 let hoveredDataIndex = -1;
 let nameSelIndex="LabMonitorViewer_device_dropdown";
@@ -36,9 +36,12 @@ function initChart() {
                 x: {
                     type: 'time',
                     time: {
-                        unit: 'second',
+                        minUnit: 'second',
                         displayFormats: {
-                            second: 'HH:mm:ss'
+                            second: 'HH:mm:ss',
+                            minute: 'HH:mm',
+                            hour:   'MMM d, HH:mm',
+                            day:    'MMM d'
                         }
                     },
                     title: {
@@ -187,6 +190,7 @@ async function fetchAndDisplayData() {
 
     } catch (error) {
         console.error('Error fetching data:', error);
+        clearPlot();
         alert(`Error fetching data: ${error.message}`);
     } finally {
         document.getElementById('fetchDataButton').textContent = "Fetch Data";
