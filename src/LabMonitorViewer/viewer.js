@@ -254,7 +254,7 @@ function updateVisibleDatasets() {
             
             newDatasets.push({
                 label: key,
-                data: chartDataStore[key],
+                data: [...chartDataStore[key]],
                 borderColor: color,
                 backgroundColor: color,
                 fill: false,
@@ -265,7 +265,7 @@ function updateVisibleDatasets() {
     });
 
     sensorChart.data.datasets = newDatasets;
-    sensorChart.data.labels = chartDataStore.labels; 
+    sensorChart.data.labels = [...chartDataStore.labels];
     sensorChart.update();
 }
 
