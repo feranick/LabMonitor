@@ -1,0 +1,3 @@
+[submodule "src/Mongo-scripts"]
+	path = src/Mongo-scripts
+	url = https://github.com/feranick/Mongo-scripts.git
