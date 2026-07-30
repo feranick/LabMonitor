@@ -33,7 +33,7 @@
     }
     fieldset {
         background-color: #C0C0C0;
-        max-width: 600px;
+        max-width: 1000px;
         margin: 10px auto;
         padding: 15px;
         border: 1px solid #ccc;
@@ -70,22 +70,40 @@
         border-color: #8b9aa6;
         cursor: default;
     }
-    button#clearButton {
+    button#clearButton, button#resetCropButton {
         background-color: #a02c2c; /* Dark red */
         border-color: #a02c2c;
     }
-    button#clearButton:hover {
+    button#clearButton:hover, button#resetCropButton:hover:enabled {
         background-color: #c93434;
+    }
+    button#cropButton {
+        background-color: #006400; /* Green: the main analysis action */
+        border-color: #006400;
+    }
+    button#cropButton:hover:enabled {
+        background-color: #048104;
     }
     input[type="number"] {
         width: 80px;
         text-align: center;
     }
+    input[type="color"] {
+        width: 42px;
+        height: 28px;
+        padding: 0;
+        border: 1px solid #555;
+        border-radius: 4px;
+        background: none;
+        cursor: pointer;
+        vertical-align: middle;
+    }
 
     /* --- Layout --- */
     .four-column-layout {
         display: flex;
-        gap: 5px;
+        flex-wrap: wrap;
+        gap: 10px;
         text-align: left;
         font-size: 18px;
         width: 100%;
@@ -93,6 +111,7 @@
     }
     .column {
         flex: 1;
+        min-width: 210px;
         padding-left: 10px;
     }
     legend {
@@ -130,6 +149,7 @@
         border-bottom: 1px solid #d0d0d0;
         vertical-align: middle;
     }
+    #datasetList tr[data-id] { cursor: pointer; }
     #datasetList tr.active-row {
         background-color: #cfe0ee;
         font-weight: 700;
@@ -143,7 +163,7 @@
         vertical-align: middle;
     }
     .ds-name {
-        max-width: 260px;
+        max-width: 300px;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
@@ -151,6 +171,15 @@
         vertical-align: middle;
     }
     .ds-meta { color: #555; font-weight: 400; white-space: nowrap; }
+    .tag-crop {
+        background-color: #006400;
+        color: white;
+        font-size: 11px;
+        font-weight: 700;
+        padding: 1px 5px;
+        border-radius: 3px;
+        white-space: nowrap;
+    }
     .row-btn {
         font-size: 13px;
         padding: 2px 7px;
@@ -189,12 +218,12 @@
         color: #00008B;
         display: block;
         margin-bottom: 6px;
-        max-width: 320px;
+        max-width: 340px;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
     }
-    .hint { font-size: 12px; color: #333; margin-top: 6px; }
+    .hint { font-size: 12px; color: #333; margin-top: 6px; width: 100%; }
     #fileInput { display: none; }
     .export-scope {
         display: inline-block;
@@ -203,6 +232,41 @@
         white-space: nowrap;
         cursor: pointer;
     }
+    #dsLabelInput {
+        font-size: 14px;
+        padding: 4px 6px;
+        width: 210px;
+    }
+
+    /* --- Curve style panel --- */
+    #curveStyleList {
+        width: 100%;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px 16px;
+        justify-content: flex-start;
+        text-align: left;
+    }
+    .curve-row {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 14px;
+        background-color: #e8e8e8;
+        border-radius: 6px;
+        padding: 5px 8px;
+    }
+    .curve-row .curve-label {
+        min-width: 62px;
+        font-weight: 700;
+    }
+    .curve-row input[type="number"] {
+        width: 62px;
+        font-size: 14px;
+        padding: 3px 4px;
+        border-width: 1px;
+    }
+    .curve-row .unit-tag { color: #555; font-size: 12px; }
 </style>
 </head>
 
@@ -225,10 +289,11 @@
     <div class="hint">Drag &amp; drop CSV files onto the plot to load them. Click a row to make it active.</div>
 </fieldset>
 
-<!-- ===== Offsets / axis / view ===== -->
+<!-- ===== Active dataset: offsets, crop, colour ===== -->
 <fieldset>
+    <legend>Active dataset</legend>
     <div class="four-column-layout">
-        <div class="column" style="flex:1.5;">
+        <div class="column" style="flex:1.4;">
             <span id="activeLabel">No dataset loaded</span>
             <div class="offset-grid">
                 <label for="xOffsetInput">X offset</label>
@@ -248,10 +313,37 @@
             </div>
             <div style="margin-top:8px;">
                 <button id="resetOffsetsButton" title="Set the active dataset's offsets back to zero">Reset Offsets</button>
-                <button id="zeroAlignButton" title="Shift the active dataset so its first point sits at x=0, y=0 of the reference series">Zero Align</button>
+                <button id="zeroAlignButton" title="Shift the active dataset so the first point of the reference series sits at y=0">Zero Align</button>
             </div>
             <div class="hint">Arrow keys nudge the active dataset while the plot is focused.</div>
         </div>
+        <div class="column">
+            <label for="dsLabelInput" style="font-size:15px;">Legend label:</label><br>
+            <input type="text" id="dsLabelInput" placeholder="dataset label">
+            <br><br>
+            <label for="baseColorInput" style="font-size:15px;">Base colour:</label>
+            <input type="color" id="baseColorInput" title="All curves of this dataset are shaded from this colour">
+            <br>
+            <button id="resetStylesButton" style="margin-top:8px;" title="Discard per-curve colour and size overrides for this dataset">Reset Curve Styles</button>
+        </div>
+        <div class="column">
+            <button id="cropButton" title="Keep only the points inside the current x-axis window and restart their elapsed time at zero">Crop to View</button>
+            <br><br>
+            <button id="resetCropButton" title="Restore all points of the active dataset">Reset Crop</button>
+            <div class="hint">Zoom into one run, then crop: the kept points restart at t = 0.</div>
+        </div>
+    </div>
+</fieldset>
+
+<!-- ===== Curve styles ===== -->
+<fieldset>
+    <legend>Curve colours &amp; sizes (active dataset)</legend>
+    <div id="curveStyleList"></div>
+</fieldset>
+
+<!-- ===== View / export ===== -->
+<fieldset>
+    <div class="four-column-layout">
         <div class="column">
             <label for="xUnitSelect" style="font-size:15px;">Time unit:</label>
             <select id="xUnitSelect">
@@ -259,7 +351,8 @@
                 <option value="60" selected>minutes</option>
                 <option value="3600">hours</option>
             </select>
-            <br><br>
+        </div>
+        <div class="column">
             <button id="zoomButton">Toggle Pan/Zoom</button>
             <br><br>
             <button id="resetZoomButton">Reset Zoom</button>

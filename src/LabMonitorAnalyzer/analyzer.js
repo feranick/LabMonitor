@@ -1,35 +1,37 @@
-let version = "2026.07.30.1";
+let version = "2026.07.30.2";
 let sensorChart;
 
 // --- Series definitions -------------------------------------------------
 // Keys match the CSV headers written by LabMonitor Viewer's CSV export.
-// Each series gets its own dash pattern so that, within one dataset colour,
-// the individual curves stay distinguishable.
+// Curves of one dataset share a colour family: the dataset base colour is
+// shifted slightly in hue and lightness per series, so a dataset stays
+// recognisable at a glance while its individual curves remain separable.
 const SERIES = [
-    { key: 'sens1_Temp', label: 'S1 Temp', unit: '\u00B0C', dash: [] },
-    { key: 'sens2_Temp', label: 'S2 Temp', unit: '\u00B0C', dash: [6, 4] },
-    { key: 'sens1_WBT',  label: 'S1 WBT',  unit: '\u00B0C', dash: [2, 3] },
-    { key: 'sens1_RH',   label: 'S1 RH',   unit: '%',       dash: [9, 3, 2, 3] },
-    { key: 'sens1_HI',   label: 'S1 HI',   unit: '\u00B0C', dash: [12, 4] },
-    { key: 'sens2_RH',   label: 'S2 RH',   unit: '%',       dash: [10, 3, 3, 3] },
-    { key: 'sens3_Temp', label: 'S3 Temp', unit: '\u00B0C', dash: [1, 4] },
-    { key: 'sens3_RH',   label: 'S3 RH',   unit: '%',       dash: [4, 2, 1, 2] }
+    { key: 'sens1_Temp', label: 'S1 Temp', unit: '\u00B0C', dHue:   0, dLight:   0 },
+    { key: 'sens2_Temp', label: 'S2 Temp', unit: '\u00B0C', dHue:  16, dLight: -14 },
+    { key: 'sens1_WBT',  label: 'S1 WBT',  unit: '\u00B0C', dHue: -16, dLight:  14 },
+    { key: 'sens1_RH',   label: 'S1 RH',   unit: '%',       dHue:  30, dLight:  -6 },
+    { key: 'sens1_HI',   label: 'S1 HI',   unit: '\u00B0C', dHue: -30, dLight:   6 },
+    { key: 'sens2_RH',   label: 'S2 RH',   unit: '%',       dHue:  44, dLight:  22 },
+    { key: 'sens3_Temp', label: 'S3 Temp', unit: '\u00B0C', dHue: -44, dLight: -24 },
+    { key: 'sens3_RH',   label: 'S3 RH',   unit: '%',       dHue:  58, dLight:  10 }
 ];
 const SERIES_KEYS = SERIES.map(s => s.key);
 
-// Colour-blind-friendly qualitative palette, one colour per dataset.
-const PALETTE = [
-    [214, 39, 40], [31, 119, 180], [44, 160, 44], [148, 103, 189],
-    [255, 127, 14], [23, 190, 207], [227, 119, 194], [127, 127, 127],
-    [188, 189, 34], [140, 86, 75]
-];
+// One base colour per dataset (colour-blind-friendly qualitative palette).
+const PALETTE = ['#d62728', '#1f77b4', '#2ca02c', '#9467bd', '#ff7f0e',
+                 '#17becf', '#e377c2', '#7f7f7f', '#bcbd22', '#8c564b'];
+
+const DEFAULT_WIDTH = 2;
+const DEFAULT_POINT = 2;
 
 // --- Application state --------------------------------------------------
 // Every dataset keeps its samples as *elapsed seconds from its own first
 // sample*, so all curves start at time zero no matter when they were taken.
 // Offsets are stored in canonical units (seconds for X, data units for Y)
 // and converted for display, so switching the time unit never moves a curve.
-const datasets = [];   // { id, name, colorIndex, tSec[], series{}, xOffsetSec, yOffset, visible, startTime }
+// `raw` holds the untouched parse result so a crop is always reversible.
+const datasets = [];
 let activeId = null;
 let datasetCounter = 0;
 let zoomModeDrag = true;   // true = box-zoom on drag, false = pan on drag
@@ -59,11 +61,6 @@ function unitShort() {
     return d === 1 ? 's' : (d === 60 ? 'min' : 'h');
 }
 
-function rgba(colorIndex, alpha) {
-    const c = PALETTE[colorIndex % PALETTE.length];
-    return `rgba(${c[0]}, ${c[1]}, ${c[2]}, ${alpha})`;
-}
-
 function getActive() {
     return datasets.find(d => d.id === activeId) || null;
 }
@@ -72,6 +69,81 @@ function selectedSeriesKeys() {
     return Array.from(document.querySelectorAll('.data-checkbox'))
         .filter(cb => cb.checked)
         .map(cb => cb.dataset.key);
+}
+
+// --- Colour utilities ---------------------------------------------------
+function hexToRgb(hex) {
+    const h = hex.replace('#', '');
+    const full = h.length === 3 ? h.split('').map(c => c + c).join('') : h;
+    return [parseInt(full.slice(0, 2), 16), parseInt(full.slice(2, 4), 16), parseInt(full.slice(4, 6), 16)];
+}
+
+function rgbToHex(r, g, b) {
+    const c = v => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0');
+    return '#' + c(r) + c(g) + c(b);
+}
+
+function rgbToHsl(r, g, b) {
+    r /= 255; g /= 255; b /= 255;
+    const max = Math.max(r, g, b), min = Math.min(r, g, b);
+    const l = (max + min) / 2;
+    let h = 0, s = 0;
+    if (max !== min) {
+        const d = max - min;
+        s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+        if (max === r) h = ((g - b) / d + (g < b ? 6 : 0));
+        else if (max === g) h = (b - r) / d + 2;
+        else h = (r - g) / d + 4;
+        h *= 60;
+    }
+    return [h, s, l];
+}
+
+function hslToRgb(h, s, l) {
+    h = ((h % 360) + 360) % 360 / 360;
+    if (s === 0) return [l * 255, l * 255, l * 255];
+    const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+    const p = 2 * l - q;
+    const hue = t => {
+        if (t < 0) t += 1;
+        if (t > 1) t -= 1;
+        if (t < 1 / 6) return p + (q - p) * 6 * t;
+        if (t < 1 / 2) return q;
+        if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+        return p;
+    };
+    return [hue(h + 1 / 3) * 255, hue(h) * 255, hue(h - 1 / 3) * 255];
+}
+
+// Shifts a colour within its own family: small hue rotation plus a lightness
+// nudge, clamped so nothing washes out to white or collapses to black.
+function shiftColor(hex, dHue, dLightPercent) {
+    const [r, g, b] = hexToRgb(hex);
+    const [h, s, l] = rgbToHsl(r, g, b);
+    const newL = Math.max(0.22, Math.min(0.72, l + dLightPercent / 100));
+    const newS = Math.max(0.25, Math.min(1, s));
+    const [nr, ng, nb] = hslToRgb(h + dHue, newS, newL);
+    return rgbToHex(nr, ng, nb);
+}
+
+function hexToRgba(hex, alpha) {
+    const [r, g, b] = hexToRgb(hex);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+// Colour a curve gets when the user has not overridden it.
+function defaultCurveColor(ds, key) {
+    const meta = SERIES.find(s => s.key === key);
+    return shiftColor(ds.baseColor, meta.dHue, meta.dLight);
+}
+
+function curveStyle(ds, key) {
+    const override = ds.styles[key] || {};
+    return {
+        color: override.color || defaultCurveColor(ds, key),
+        width: Number.isFinite(override.width) ? override.width : DEFAULT_WIDTH,
+        point: Number.isFinite(override.point) ? override.point : DEFAULT_POINT
+    };
 }
 
 // --- Chart Initialization ----------------------------------------------
@@ -198,22 +270,31 @@ function parseCsvText(text, fileName) {
     rows.sort((a, b) => a.ms - b.ms);
     const t0 = rows[0].ms;
 
+    const tSec = rows.map(r => (r.ms - t0) / 1000);   // starts at exactly 0
+    const series = {};
+    SERIES_KEYS.forEach(key => { series[key] = rows.map(r => r.values[key]); });
+
     const ds = {
         id: ++datasetCounter,
         name: fileName,
+        label: fileName.replace(/\.csv$/i, ''),
         colorIndex: datasetCounter - 1,
-        tSec: rows.map(r => (r.ms - t0) / 1000),   // starts at exactly 0
-        series: {},
+        baseColor: PALETTE[(datasetCounter - 1) % PALETTE.length],
+        styles: {},                 // per-series {color, width, point} overrides
+        tSec: tSec,
+        series: series,
+        raw: { tSec: tSec.slice(), series: series, startMs: t0 },
         xOffsetSec: 0,
         yOffset: 0,
         visible: true,
-        startTime: new Date(t0),
+        cropped: false,
+        startTime: new Date(t0),    // wall-clock time of the current t = 0
         skippedRows: skipped
     };
-    SERIES_KEYS.forEach(key => {
-        ds.series[key] = rows.map(r => r.values[key]);
-    });
-    // Remember which series actually carry data, to keep the legend clean.
+    // Keep the raw series arrays independent of the working copies.
+    ds.raw.series = {};
+    SERIES_KEYS.forEach(key => { ds.raw.series[key] = series[key].slice(); });
+
     ds.availableKeys = SERIES_KEYS.filter(k => ds.series[k].some(v => v !== null));
     return ds;
 }
@@ -237,9 +318,7 @@ async function handleFiles(fileList) {
     }
 
     if (added > 0) {
-        renderDatasetList();
-        syncOffsetInputs();
-        rebuildChart();
+        refreshAll();
         sensorChart.resetZoom();
     }
     if (problems.length > 0) {
@@ -248,29 +327,37 @@ async function handleFiles(fileList) {
 }
 
 // --- Dataset list / active selection -----------------------------------
+function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, c => (
+        { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+    ));
+}
+
 function renderDatasetList() {
     const table = document.getElementById('datasetList');
     const select = document.getElementById('activeDatasetSelect');
 
     if (datasets.length === 0) {
-        table.innerHTML = '<tr><td class="empty-note">No datasets loaded. Use \u201CLoad CSV\u2026\u201D or drop files on the plot.</td></tr>';
+        table.innerHTML = '<tr><td class="empty-note">No datasets loaded. Use "Load CSV..." or drop files on the plot.</td></tr>';
         select.innerHTML = '<option value="">&mdash; none &mdash;</option>';
-        document.getElementById('activeLabel').textContent = 'No dataset loaded';
-        setOffsetControlsEnabled(false);
         return;
     }
 
-    let html = '<tr><th></th><th>File</th><th>Points</th><th>Duration</th><th>X off</th><th>Y off</th><th>Show</th><th></th></tr>';
+    let html = '<tr><th></th><th>Dataset</th><th>Points</th><th>Duration</th>'
+             + '<th>X off</th><th>Y off</th><th>Starts</th><th>Show</th><th></th></tr>';
     datasets.forEach(ds => {
         const dur = ds.tSec.at(-1) / unitDivisor();
         const isActive = ds.id === activeId;
+        const cropTag = ds.cropped
+            ? ` <span class="tag-crop" title="Cropped: ${ds.raw.tSec.length} points in the file">CROP</span>` : '';
         html += `<tr class="${isActive ? 'active-row' : ''}" data-id="${ds.id}">
-            <td><span class="swatch" style="background:${rgba(ds.colorIndex, 1)}"></span></td>
-            <td><span class="ds-name" title="${escapeHtml(ds.name)} &mdash; starts ${ds.startTime.toLocaleString()}">${escapeHtml(ds.name)}</span></td>
+            <td><span class="swatch" style="background:${ds.baseColor}"></span></td>
+            <td><span class="ds-name" title="${escapeHtml(ds.name)}">${escapeHtml(ds.label)}</span>${cropTag}</td>
             <td class="ds-meta">${ds.tSec.length}</td>
             <td class="ds-meta">${dur.toFixed(2)} ${unitShort()}</td>
             <td class="ds-meta">${(ds.xOffsetSec / unitDivisor()).toFixed(3)}</td>
             <td class="ds-meta">${ds.yOffset.toFixed(3)}</td>
+            <td class="ds-meta">${ds.startTime.toLocaleTimeString()}</td>
             <td><input type="checkbox" class="ds-visible" data-id="${ds.id}" ${ds.visible ? 'checked' : ''}></td>
             <td><button class="row-btn ds-remove" data-id="${ds.id}" title="Remove this dataset">&times;</button></td>
         </tr>`;
@@ -295,32 +382,95 @@ function renderDatasetList() {
     });
 
     select.innerHTML = datasets
-        .map(ds => `<option value="${ds.id}" ${ds.id === activeId ? 'selected' : ''}>${escapeHtml(ds.name)}</option>`)
+        .map(ds => `<option value="${ds.id}" ${ds.id === activeId ? 'selected' : ''}>${escapeHtml(ds.label)}</option>`)
         .join('');
-
-    const act = getActive();
-    document.getElementById('activeLabel').textContent = act ? `Active: ${act.name}` : 'No dataset selected';
-    setOffsetControlsEnabled(!!act);
 }
 
-function escapeHtml(s) {
-    return String(s).replace(/[&<>"']/g, c => (
-        { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
-    ));
-}
-
-function setOffsetControlsEnabled(enabled) {
+function setControlsEnabled() {
+    const ds = getActive();
     ['xOffsetInput', 'yOffsetInput', 'xMinusButton', 'xPlusButton',
-     'yMinusButton', 'yPlusButton', 'resetOffsetsButton', 'zeroAlignButton']
-        .forEach(id => { document.getElementById(id).disabled = !enabled; });
+     'yMinusButton', 'yPlusButton', 'resetOffsetsButton', 'zeroAlignButton',
+     'dsLabelInput', 'baseColorInput', 'resetStylesButton', 'cropButton']
+        .forEach(id => { document.getElementById(id).disabled = !ds; });
+    document.getElementById('resetCropButton').disabled = !ds || !ds.cropped;
+
+    const label = document.getElementById('activeLabel');
+    label.textContent = ds
+        ? `Active: ${ds.label}${ds.cropped ? ' (cropped)' : ''}`
+        : 'No dataset loaded';
+    document.getElementById('dsLabelInput').value = ds ? ds.label : '';
+    document.getElementById('baseColorInput').value = ds ? ds.baseColor : '#d62728';
+}
+
+// Per-curve colour / line width / point size for the active dataset.
+function renderCurveStyles() {
+    const host = document.getElementById('curveStyleList');
+    const ds = getActive();
+    if (!ds) {
+        host.innerHTML = '<div class="empty-note">Load a dataset to adjust curve colours and sizes.</div>';
+        return;
+    }
+    const keys = selectedSeriesKeys().filter(k => ds.availableKeys.includes(k));
+    if (keys.length === 0) {
+        host.innerHTML = '<div class="empty-note">No selected series carries data in this dataset.</div>';
+        return;
+    }
+
+    host.innerHTML = keys.map(key => {
+        const meta = SERIES.find(s => s.key === key);
+        const st = curveStyle(ds, key);
+        return `<div class="curve-row">
+            <input type="color" class="curve-color" data-key="${key}" value="${st.color}" title="Curve colour">
+            <span class="curve-label">${meta.label}</span>
+            <label title="Line width in px">line
+                <input type="number" class="curve-width" data-key="${key}" value="${st.width}" min="0" max="10" step="0.5">
+            </label>
+            <label title="Point radius in px (0 hides the markers)">pt
+                <input type="number" class="curve-point" data-key="${key}" value="${st.point}" min="0" max="10" step="0.5">
+            </label>
+        </div>`;
+    }).join('');
+
+    // Live updates without re-rendering the panel, so focus is never stolen.
+    host.querySelectorAll('.curve-color').forEach(inp => {
+        inp.addEventListener('input', () => setCurveStyle(inp.dataset.key, { color: inp.value }));
+    });
+    host.querySelectorAll('.curve-width').forEach(inp => {
+        inp.addEventListener('input', () => setCurveStyle(inp.dataset.key, { width: parseFloat(inp.value) }));
+    });
+    host.querySelectorAll('.curve-point').forEach(inp => {
+        inp.addEventListener('input', () => setCurveStyle(inp.dataset.key, { point: parseFloat(inp.value) }));
+    });
+}
+
+function setCurveStyle(key, patch) {
+    const ds = getActive();
+    if (!ds) return;
+    ds.styles[key] = Object.assign({}, ds.styles[key], patch);
+    rebuildChart();
+}
+
+function resetCurveStyles() {
+    const ds = getActive();
+    if (!ds) return;
+    ds.styles = {};
+    renderCurveStyles();
+    rebuildChart();
+}
+
+// Redraws every dependent piece of UI plus the chart.
+function refreshAll() {
+    renderDatasetList();
+    setControlsEnabled();
+    syncOffsetInputs();
+    renderCurveStyles();
+    rebuildChart();
 }
 
 function setActive(id) {
     if (activeId === id) return;
     activeId = id;
-    renderDatasetList();
-    syncOffsetInputs();
-    rebuildChart();
+    refreshAll();
 }
 
 function removeDataset(id) {
@@ -330,18 +480,14 @@ function removeDataset(id) {
     if (activeId === id) {
         activeId = datasets.length ? datasets[Math.min(idx, datasets.length - 1)].id : null;
     }
-    renderDatasetList();
-    syncOffsetInputs();
-    rebuildChart();
+    refreshAll();
 }
 
 function clearAll() {
     if (datasets.length === 0) return;
     datasets.length = 0;
     activeId = null;
-    renderDatasetList();
-    syncOffsetInputs();
-    rebuildChart();
+    refreshAll();
     console.log('All datasets cleared.');
 }
 
@@ -404,6 +550,66 @@ function zeroAlign() {
     rebuildChart();
 }
 
+// --- Crop to view -------------------------------------------------------
+// Keeps only the samples of the active dataset that fall inside the current
+// x-axis window, then restarts their elapsed time at zero. Non-destructive:
+// ds.raw still holds the full file, so Reset Crop always works.
+function cropToView() {
+    const ds = getActive();
+    if (!ds) return;
+    const x = sensorChart.scales.x;
+    if (!x) return;
+
+    // Plotted x = (tSec + xOffsetSec) / divisor  =>  invert for tSec limits.
+    const div = unitDivisor();
+    const tMin = x.min * div - ds.xOffsetSec;
+    const tMax = x.max * div - ds.xOffsetSec;
+
+    const keep = [];
+    for (let i = 0; i < ds.tSec.length; i++) {
+        if (ds.tSec[i] >= tMin && ds.tSec[i] <= tMax) keep.push(i);
+    }
+    if (keep.length < 2) {
+        alert('The visible range contains fewer than two points of the active dataset.\nZoom out a little and try again.');
+        return;
+    }
+    if (keep.length === ds.tSec.length) {
+        alert('The whole dataset is already visible, so there is nothing to crop.');
+        return;
+    }
+
+    const tStart = ds.tSec[keep[0]];
+    const newT = keep.map(i => ds.tSec[i] - tStart);
+    const newSeries = {};
+    SERIES_KEYS.forEach(key => { newSeries[key] = keep.map(i => ds.series[key][i]); });
+
+    // The wall-clock time that the new t = 0 corresponds to.
+    ds.startTime = new Date(ds.startTime.getTime() + tStart * 1000);
+    ds.tSec = newT;
+    ds.series = newSeries;
+    ds.availableKeys = SERIES_KEYS.filter(k => ds.series[k].some(v => v !== null));
+    ds.cropped = true;
+    ds.xOffsetSec = 0;   // the crop itself re-zeroes time
+
+    console.log(`Cropped "${ds.label}" to ${newT.length} points, new t=0 at ${ds.startTime.toISOString()}.`);
+    refreshAll();
+    resetZoom();
+}
+
+function resetCrop() {
+    const ds = getActive();
+    if (!ds || !ds.cropped) return;
+    ds.tSec = ds.raw.tSec.slice();
+    ds.series = {};
+    SERIES_KEYS.forEach(key => { ds.series[key] = ds.raw.series[key].slice(); });
+    ds.availableKeys = SERIES_KEYS.filter(k => ds.series[k].some(v => v !== null));
+    ds.startTime = new Date(ds.raw.startMs);
+    ds.cropped = false;
+    ds.xOffsetSec = 0;
+    refreshAll();
+    resetZoom();
+}
+
 // --- Plotting -----------------------------------------------------------
 function seriesPoints(ds, key) {
     const div = unitDivisor();
@@ -427,14 +633,17 @@ function rebuildChart() {
         keys.forEach(key => {
             if (!ds.availableKeys.includes(key)) return;
             const meta = SERIES.find(s => s.key === key);
+            const st = curveStyle(ds, key);
+            // Inactive datasets keep their colours but are drawn translucent,
+            // so the active one reads as the foreground curve.
+            const color = isActive ? st.color : hexToRgba(st.color, 0.4);
             chartDatasets.push({
-                label: `${ds.name} \u00B7 ${meta.label}`,
+                label: `${ds.label} - ${meta.label}`,
                 data: seriesPoints(ds, key),
-                borderColor: rgba(ds.colorIndex, isActive ? 1 : 0.45),
-                backgroundColor: rgba(ds.colorIndex, isActive ? 1 : 0.45),
-                borderDash: meta.dash,
-                borderWidth: isActive ? 2.5 : 1.5,
-                pointRadius: isActive ? 2 : 1,
+                borderColor: color,
+                backgroundColor: color,
+                borderWidth: st.width,
+                pointRadius: st.point,
                 fill: false,
                 tension: 0.1,
                 spanGaps: true,
@@ -519,12 +728,12 @@ function buildCombinedCsv() {
     const keys = selectedSeriesKeys();
     const range = visibleXRange();
     const div = unitDivisor();
-    const active = datasets.filter(ds => ds.visible);
+    const shown = datasets.filter(ds => ds.visible);
 
-    if (active.length === 0 || keys.length === 0) return null;
+    if (shown.length === 0 || keys.length === 0) return null;
 
     const blocks = [];
-    active.forEach(ds => {
+    shown.forEach(ds => {
         const cols = keys.filter(k => ds.availableKeys.includes(k));
         if (cols.length === 0) return;
         const rows = [];
@@ -544,8 +753,8 @@ function buildCombinedCsv() {
 
     const header = [];
     nonEmpty.forEach(b => {
-        header.push(`${b.ds.name} time_${unitShort()}`);
-        b.cols.forEach(k => header.push(`${b.ds.name} ${k}`));
+        header.push(`${b.ds.label} time_${unitShort()}`);
+        b.cols.forEach(k => header.push(`${b.ds.label} ${k}`));
     });
 
     const maxRows = Math.max(...nonEmpty.map(b => b.rows.length));
@@ -629,7 +838,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initChart();
     zoomModeDrag = false;
     toggleZoomMode();          // flips to drag-zoom and sets the button label
-    renderDatasetList();
+    refreshAll();
 
     // --- Loading files ---
     document.getElementById('loadCsvButton').addEventListener('click', () => fileInput.click());
@@ -658,6 +867,25 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     document.getElementById('clearButton').addEventListener('click', clearAll);
 
+    // --- Label + colours ---
+    document.getElementById('dsLabelInput').addEventListener('change', function () {
+        const ds = getActive();
+        if (!ds) return;
+        ds.label = this.value.trim() || ds.name;
+        renderDatasetList();
+        rebuildChart();
+    });
+    document.getElementById('baseColorInput').addEventListener('input', function () {
+        const ds = getActive();
+        if (!ds) return;
+        ds.baseColor = this.value;
+        ds.styles = {};          // re-derive the whole family from the new base
+        renderDatasetList();
+        renderCurveStyles();
+        rebuildChart();
+    });
+    document.getElementById('resetStylesButton').addEventListener('click', resetCurveStyles);
+
     // --- Offsets ---
     document.getElementById('xOffsetInput').addEventListener('change', applyOffsetsFromInputs);
     document.getElementById('yOffsetInput').addEventListener('change', applyOffsetsFromInputs);
@@ -667,6 +895,10 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('yPlusButton').addEventListener('click', () => nudge('y', +1));
     document.getElementById('resetOffsetsButton').addEventListener('click', resetOffsets);
     document.getElementById('zeroAlignButton').addEventListener('click', zeroAlign);
+
+    // --- Crop ---
+    document.getElementById('cropButton').addEventListener('click', cropToView);
+    document.getElementById('resetCropButton').addEventListener('click', resetCrop);
 
     // Arrow keys nudge the active dataset while the plot has focus.
     chartContainer.addEventListener('keydown', e => {
@@ -692,6 +924,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Series selection ---
     document.querySelectorAll('.data-checkbox').forEach(cb => {
-        cb.addEventListener('change', rebuildChart);
+        cb.addEventListener('change', () => {
+            renderCurveStyles();
+            rebuildChart();
+        });
     });
 });
