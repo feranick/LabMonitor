@@ -118,6 +118,13 @@
         color: #00008B; /* Dark blue for values */
     }
     small { display: block; margin-top: 5px; }
+    .export-scope {
+        display: inline-block;
+        margin-top: 6px;
+        font-size: 14px;
+        white-space: nowrap;
+        cursor: pointer;
+    }
 </style>
 </head>
 
@@ -157,7 +164,10 @@
     </div>
     <div class="column">
     <button id="savePngButton">Save Plot as PNG</button>
-    <br><br><button id="saveCsvButton">Save Data as CSV</button>
+    <br><br><button id="saveCsvButton" title="Exports only the visible time range unless 'Full data' is checked">Save Data as CSV</button>
+    <br><label class="export-scope" title="Checked: export everything loaded. Unchecked: export only the visible time range.">
+        <input type="checkbox" id="fullDataCheckbox"> Full data
+    </label>
     </div>
     </div>
 </fieldset>

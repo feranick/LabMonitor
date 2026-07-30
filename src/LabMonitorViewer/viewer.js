@@ -1,4 +1,4 @@
-let version = "2026.07.03.1";
+let version = "2026.07.30.1";
 let sensorChart;
 let hoveredDataIndex = -1;
 let nameSelIndex="LabMonitorViewer_device_dropdown";
@@ -291,6 +291,36 @@ function clearPlot() {
 }
 
 // --- Export Functions ---
+
+// Determine which indices of chartDataStore should be exported.
+// If the "Full data" checkbox is checked, everything currently loaded is
+// exported. Otherwise only the points inside the visible x-axis window
+// (as set by the time selector, zooming or panning) are exported.
+function getExportRange() {
+    const n = chartDataStore.labels.length;
+    const fullCb = document.getElementById('fullDataCheckbox');
+    const fullData = fullCb ? fullCb.checked : true;
+
+    if (fullData || n === 0) {
+        return { start: 0, end: n, full: true };
+    }
+
+    const xScale = sensorChart.scales.x;
+    if (!xScale) {
+        return { start: 0, end: n, full: true };
+    }
+    const min = xScale.min;
+    const max = xScale.max;
+
+    // labels are in ascending time order, so simple boundary walks suffice
+    let start = 0;
+    while (start < n && chartDataStore.labels[start].getTime() < min) start++;
+    let end = n;
+    while (end > start && chartDataStore.labels[end - 1].getTime() > max) end--;
+
+    return { start: start, end: end, full: false };
+}
+
 function exportToPng() {
     // Add a title for the exported image
     sensorChart.options.animation = false;
@@ -310,7 +340,8 @@ function exportToPng() {
 
     const link = document.createElement('a');
     link.href = tmp.toDataURL('image/png');
-    link.download = (chartDataStore.isoLabels.at(-1) || 'export') + '_sensor-plot.png';
+    const pngRange = getExportRange();
+    link.download = (chartDataStore.isoLabels[pngRange.end - 1] || 'export') + '_sensor-plot.png';
     link.click();
 
     sensorChart.options.plugins.title = { display: false };
@@ -318,10 +349,22 @@ function exportToPng() {
 }
 
 function exportToCsv() {
+    const range = getExportRange();
+
+    if (chartDataStore.isoLabels.length === 0) {
+        alert("No data to export. Fetch data first.");
+        return;
+    }
+    if (range.end <= range.start) {
+        alert("No data points in the visible time range.\nZoom out, or check \"Full data\" to export everything.");
+        return;
+    }
+    console.log(`Exporting ${range.end - range.start} of ${chartDataStore.isoLabels.length} points (${range.full ? 'full data' : 'visible range'}).`);
+
     const headers = ['timestamp', 'sens1_Temp', 'sens2_Temp', 'sens1_RH', 'sens1_WBT', 'sens1_HI', 'sens2_RH', 'sens3_Temp', 'sens3_RH'];
     let csvContent = "data:text/csv;charset=utf-8," + headers.join(',') + "\n";
 
-    for (let i = 0; i < chartDataStore.isoLabels.length; i++) {
+    for (let i = range.start; i < range.end; i++) {
         const row = [
             chartDataStore.isoLabels[i],
             chartDataStore.sens1_Temp[i],
@@ -339,7 +382,7 @@ function exportToCsv() {
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
-    link.setAttribute('download', chartDataStore.isoLabels.at(-1)+'_sensor-data.csv');
+    link.setAttribute('download', chartDataStore.isoLabels[range.end - 1] + '_sensor-data.csv');
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -435,6 +478,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const csvBtn = document.getElementById('saveCsvButton');
     const zoomBtn = document.getElementById('zoomButton');
     const resetZoomBtn = document.getElementById('resetZoomButton'); 
+    const fullDataCb = document.getElementById('fullDataCheckbox');
     const checkboxes = document.querySelectorAll('.data-checkbox');
     const deviceDropdown = document.getElementById('deviceDropdown');
     const timePeriodDropdown = document.getElementById('timePeriodDropdown');
@@ -520,6 +564,14 @@ document.addEventListener('DOMContentLoaded', () => {
     csvBtn.addEventListener('click', exportToCsv);
     zoomBtn.addEventListener('click', toggleZoomMode); // NEW
     resetZoomBtn.addEventListener('click', resetZoom); // NEW
+
+    // --- "Full data" export toggle (remembered between sessions) ---
+    if (cookieExists("fullDataExport")) {
+        fullDataCb.checked = getCookie("fullDataExport") === "1";
+    }
+    fullDataCb.addEventListener('change', function() {
+        setCookie("fullDataExport", this.checked ? "1" : "0", 1000);
+    });
 
     checkboxes.forEach(cb => {
         cb.addEventListener('change', updateVisibleDatasets);
