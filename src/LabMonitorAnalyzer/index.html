@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>LabMonitor - Analyzer</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<link rel="icon" type="image/x-icon" href="favicon.ico">
+<link rel="icon" href="icon.png">
+<link rel="apple-touch-icon" href="icon180.png">
+<link rel="manifest" href="manifest.json">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.2.0/dist/chartjs-plugin-zoom.min.js"></script>
+<style>
+    body {
+        font-family: Helvetica, sans-serif;
+        text-align: center;
+        background-color: #f0f0f0;
+        padding: 10px;
+    }
+    .chart-container {
+        width: 90%;
+        max-width: 1000px;
+        margin: 20px auto;
+        background-color: white;
+        padding: 10px;
+        border-radius: 10px;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        outline: none;
+    }
+    .chart-container.dragover {
+        box-shadow: 0 0 0 3px #155084;
+    }
+    fieldset {
+        background-color: #C0C0C0;
+        max-width: 600px;
+        margin: 10px auto;
+        padding: 15px;
+        border: 1px solid #ccc;
+        border-radius: 10px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 15px;
+        justify-content: center;
+        align-items: center;
+    }
+    select {
+        padding: 5px;
+        font-size: 16px;
+        border-radius: 5px;
+        border: 1px solid #ccc;
+    }
+    button, input[type="number"], input[type="text"] {
+        font-size: 16px;
+        padding: 8px 12px;
+        border-radius: 8px;
+        border: 2px solid #aaa;
+    }
+    button {
+        background-color: #155084;
+        color: white;
+        cursor: pointer;
+        border-color: #155084;
+    }
+    button:hover {
+        background-color: #1e62a0;
+    }
+    button:disabled {
+        background-color: #8b9aa6;
+        border-color: #8b9aa6;
+        cursor: default;
+    }
+    button#clearButton {
+        background-color: #a02c2c; /* Dark red */
+        border-color: #a02c2c;
+    }
+    button#clearButton:hover {
+        background-color: #c93434;
+    }
+    input[type="number"] {
+        width: 80px;
+        text-align: center;
+    }
+
+    /* --- Layout --- */
+    .four-column-layout {
+        display: flex;
+        gap: 5px;
+        text-align: left;
+        font-size: 18px;
+        width: 100%;
+        align-items: flex-start;
+    }
+    .column {
+        flex: 1;
+        padding-left: 10px;
+    }
+    legend {
+        font-weight: bold;
+    }
+    .checkbox-group legend {
+        width: 100%;
+        font-weight: bold;
+    }
+    .checkbox-group label {
+        margin-right: 10px;
+    }
+    small { display: block; margin-top: 5px; }
+
+    /* --- Dataset list --- */
+    #datasetList {
+        width: 100%;
+        text-align: left;
+        font-size: 14px;
+        border-collapse: collapse;
+        background-color: #e8e8e8;
+        border-radius: 6px;
+        overflow: hidden;
+    }
+    #datasetList th {
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+        padding: 4px 6px;
+        border-bottom: 1px solid #aaa;
+        white-space: nowrap;
+    }
+    #datasetList td {
+        padding: 4px 6px;
+        border-bottom: 1px solid #d0d0d0;
+        vertical-align: middle;
+    }
+    #datasetList tr.active-row {
+        background-color: #cfe0ee;
+        font-weight: 700;
+    }
+    .swatch {
+        display: inline-block;
+        width: 14px;
+        height: 14px;
+        border-radius: 3px;
+        border: 1px solid #555;
+        vertical-align: middle;
+    }
+    .ds-name {
+        max-width: 260px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        display: inline-block;
+        vertical-align: middle;
+    }
+    .ds-meta { color: #555; font-weight: 400; white-space: nowrap; }
+    .row-btn {
+        font-size: 13px;
+        padding: 2px 7px;
+        border-radius: 5px;
+        border-width: 1px;
+        background-color: #a02c2c;
+        border-color: #a02c2c;
+    }
+    .row-btn:hover { background-color: #c93434; }
+    .empty-note { color: #444; font-size: 14px; padding: 6px; }
+
+    /* --- Offset controls --- */
+    .offset-grid {
+        display: grid;
+        grid-template-columns: auto auto auto auto;
+        gap: 6px 8px;
+        align-items: center;
+        font-size: 15px;
+        justify-content: start;
+    }
+    .offset-grid input[type="number"] {
+        font-size: 15px;
+        padding: 5px 6px;
+        width: 90px;
+    }
+    .nudge {
+        font-size: 15px;
+        padding: 5px 9px;
+        border-radius: 6px;
+        border-width: 1px;
+        min-width: 34px;
+    }
+    #activeLabel {
+        font-size: 14px;
+        font-weight: 700;
+        color: #00008B;
+        display: block;
+        margin-bottom: 6px;
+        max-width: 320px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .hint { font-size: 12px; color: #333; margin-top: 6px; }
+    #fileInput { display: none; }
+    .export-scope {
+        display: inline-block;
+        margin-top: 6px;
+        font-size: 14px;
+        white-space: nowrap;
+        cursor: pointer;
+    }
+</style>
+</head>
+
+<body>
+<div class="chart-container" id="chartContainer" tabindex="0">
+    <canvas id="sensorChart"></canvas>
+</div>
+
+<!-- ===== Datasets ===== -->
+<fieldset>
+    <legend>Datasets</legend>
+    <div style="width:100%; display:flex; flex-wrap:wrap; gap:10px; align-items:center; justify-content:center;">
+        <input type="file" id="fileInput" accept=".csv,text/csv" multiple>
+        <button id="loadCsvButton" title="Load one or more CSV files exported from LabMonitor Viewer">Load CSV…</button>
+        <label for="activeDatasetSelect" style="font-size:15px;">Active:</label>
+        <select id="activeDatasetSelect"></select>
+        <button id="clearButton" title="Remove all loaded datasets">Clear All</button>
+    </div>
+    <table id="datasetList"></table>
+    <div class="hint">Drag &amp; drop CSV files onto the plot to load them. Click a row to make it active.</div>
+</fieldset>
+
+<!-- ===== Offsets / axis / view ===== -->
+<fieldset>
+    <div class="four-column-layout">
+        <div class="column" style="flex:1.5;">
+            <span id="activeLabel">No dataset loaded</span>
+            <div class="offset-grid">
+                <label for="xOffsetInput">X offset</label>
+                <input type="number" id="xOffsetInput" step="any" value="0">
+                <button class="nudge" id="xMinusButton" title="Shift active dataset left by one step">&#9664;</button>
+                <button class="nudge" id="xPlusButton" title="Shift active dataset right by one step">&#9654;</button>
+
+                <label for="yOffsetInput">Y offset</label>
+                <input type="number" id="yOffsetInput" step="any" value="0">
+                <button class="nudge" id="yMinusButton" title="Shift active dataset down by one step">&#9660;</button>
+                <button class="nudge" id="yPlusButton" title="Shift active dataset up by one step">&#9650;</button>
+
+                <label for="xStepInput">X step</label>
+                <input type="number" id="xStepInput" step="any" value="1" min="0">
+                <label for="yStepInput">Y step</label>
+                <input type="number" id="yStepInput" step="any" value="0.1" min="0">
+            </div>
+            <div style="margin-top:8px;">
+                <button id="resetOffsetsButton" title="Set the active dataset's offsets back to zero">Reset Offsets</button>
+                <button id="zeroAlignButton" title="Shift the active dataset so its first point sits at x=0, y=0 of the reference series">Zero Align</button>
+            </div>
+            <div class="hint">Arrow keys nudge the active dataset while the plot is focused.</div>
+        </div>
+        <div class="column">
+            <label for="xUnitSelect" style="font-size:15px;">Time unit:</label>
+            <select id="xUnitSelect">
+                <option value="1">seconds</option>
+                <option value="60" selected>minutes</option>
+                <option value="3600">hours</option>
+            </select>
+            <br><br>
+            <button id="zoomButton">Toggle Pan/Zoom</button>
+            <br><br>
+            <button id="resetZoomButton">Reset Zoom</button>
+        </div>
+        <div class="column">
+            <button id="savePngButton">Save Plot as PNG</button>
+            <br><br>
+            <button id="saveCsvButton" title="Exports only the visible time range unless 'Full data' is checked">Save Data as CSV</button>
+            <br>
+            <label class="export-scope" title="Checked: export everything loaded. Unchecked: export only the visible x range.">
+                <input type="checkbox" id="fullDataCheckbox"> Full data
+            </label>
+        </div>
+    </div>
+</fieldset>
+
+<!-- ===== Series selection ===== -->
+<fieldset class="checkbox-group">
+    <legend>Series (applied to every dataset)</legend>
+    <label>
+        <input type="checkbox" class="data-checkbox" data-key="sens1_Temp" checked>
+        Sensor 1 Temp
+    </label>
+    <label>
+        <input type="checkbox" class="data-checkbox" data-key="sens2_Temp" checked>
+        Sensor 2 Temp
+    </label>
+    <label>
+        <input type="checkbox" class="data-checkbox" data-key="sens1_WBT" checked>
+        Sensor 1 WBT
+    </label>
+    <label>
+        <input type="checkbox" class="data-checkbox" data-key="sens1_RH">
+        Sensor 1 RH
+    </label>
+    <label>
+        <input type="checkbox" class="data-checkbox" data-key="sens1_HI">
+        Sensor 1 HI
+    </label>
+    <label>
+        <input type="checkbox" class="data-checkbox" data-key="sens2_RH">
+        Sensor 2 RH
+    </label>
+    <label>
+        <input type="checkbox" class="data-checkbox" data-key="sens3_Temp">
+        Sensor 3 Temp
+    </label>
+    <label>
+        <input type="checkbox" class="data-checkbox" data-key="sens3_RH">
+        Sensor 3 RH
+    </label>
+</fieldset>
+<br><small><small>Version: <span id="version">N/A</span></small></small>
+
+<script type="text/javascript" src="analyzer.js"></script>
+
+</body>
+</html>

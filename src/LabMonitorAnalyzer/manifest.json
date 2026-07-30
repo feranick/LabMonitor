@@ -1,0 +1,7 @@
+{
+  "name": "LabMonitor Analyzer",
+  "short_name": "LabMonitorAnalyzer",
+  "description": "LabMonitorAnalyzer",
+  "start_url": ".",
+  "display": "standalone"
+}
