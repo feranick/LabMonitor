@@ -6,13 +6,13 @@ let sensorChart;
 // Each series gets its own dash pattern so that, within one dataset colour,
 // the individual curves stay distinguishable.
 const SERIES = [
-    { key: 'sens1_Temp', label: 'S1 Temp', unit: '°C', dash: [] },
-    { key: 'sens2_Temp', label: 'S2 Temp', unit: '°C', dash: [6, 4] },
-    { key: 'sens1_WBT',  label: 'S1 WBT',  unit: '°C', dash: [2, 3] },
+    { key: 'sens1_Temp', label: 'S1 Temp', unit: '\u00B0C', dash: [] },
+    { key: 'sens2_Temp', label: 'S2 Temp', unit: '\u00B0C', dash: [6, 4] },
+    { key: 'sens1_WBT',  label: 'S1 WBT',  unit: '\u00B0C', dash: [2, 3] },
     { key: 'sens1_RH',   label: 'S1 RH',   unit: '%',       dash: [9, 3, 2, 3] },
-    { key: 'sens1_HI',   label: 'S1 HI',   unit: '°C', dash: [12, 4] },
+    { key: 'sens1_HI',   label: 'S1 HI',   unit: '\u00B0C', dash: [12, 4] },
     { key: 'sens2_RH',   label: 'S2 RH',   unit: '%',       dash: [10, 3, 3, 3] },
-    { key: 'sens3_Temp', label: 'S3 Temp', unit: '°C', dash: [1, 4] },
+    { key: 'sens3_Temp', label: 'S3 Temp', unit: '\u00B0C', dash: [1, 4] },
     { key: 'sens3_RH',   label: 'S3 RH',   unit: '%',       dash: [4, 2, 1, 2] }
 ];
 const SERIES_KEYS = SERIES.map(s => s.key);
@@ -32,6 +32,18 @@ const PALETTE = [
 const datasets = [];   // { id, name, colorIndex, tSec[], series{}, xOffsetSec, yOffset, visible, startTime }
 let activeId = null;
 let datasetCounter = 0;
+let zoomModeDrag = true;   // true = box-zoom on drag, false = pan on drag
+
+// Pan/zoom is meaningless with an empty chart: scrolling the page with the
+// cursor over the canvas would otherwise wheel-zoom the blank axes and leave
+// the plot showing an arbitrary fractional range.
+function applyZoomAvailability(hasData) {
+    const z = sensorChart.options.plugins.zoom;
+    z.zoom.wheel.enabled = hasData;
+    z.zoom.pinch.enabled = hasData;
+    z.zoom.drag.enabled = hasData && zoomModeDrag;
+    z.pan.enabled = hasData && !zoomModeDrag;
+}
 
 function unitDivisor() {
     return parseFloat(document.getElementById('xUnitSelect').value) || 1;
@@ -151,7 +163,7 @@ function toNumberOrNull(raw) {
 // Parses a Viewer-exported CSV into a dataset object.
 // Throws on unusable input so the caller can report the offending file.
 function parseCsvText(text, fileName) {
-    const clean = text.replace(/^﻿/, '');            // strip BOM
+    const clean = text.replace(/^\uFEFF/, '');            // strip BOM
     const lines = clean.split(/\r\n|\n|\r/).filter(l => l.trim() !== '');
     if (lines.length < 2) throw new Error('file contains no data rows');
 
@@ -241,8 +253,8 @@ function renderDatasetList() {
     const select = document.getElementById('activeDatasetSelect');
 
     if (datasets.length === 0) {
-        table.innerHTML = '<tr><td class="empty-note">No datasets loaded. Use “Load CSV…” or drop files on the plot.</td></tr>';
-        select.innerHTML = '<option value="">— none —</option>';
+        table.innerHTML = '<tr><td class="empty-note">No datasets loaded. Use \u201CLoad CSV\u2026\u201D or drop files on the plot.</td></tr>';
+        select.innerHTML = '<option value="">&mdash; none &mdash;</option>';
         document.getElementById('activeLabel').textContent = 'No dataset loaded';
         setOffsetControlsEnabled(false);
         return;
@@ -254,7 +266,7 @@ function renderDatasetList() {
         const isActive = ds.id === activeId;
         html += `<tr class="${isActive ? 'active-row' : ''}" data-id="${ds.id}">
             <td><span class="swatch" style="background:${rgba(ds.colorIndex, 1)}"></span></td>
-            <td><span class="ds-name" title="${escapeHtml(ds.name)} — starts ${ds.startTime.toLocaleString()}">${escapeHtml(ds.name)}</span></td>
+            <td><span class="ds-name" title="${escapeHtml(ds.name)} &mdash; starts ${ds.startTime.toLocaleString()}">${escapeHtml(ds.name)}</span></td>
             <td class="ds-meta">${ds.tSec.length}</td>
             <td class="ds-meta">${dur.toFixed(2)} ${unitShort()}</td>
             <td class="ds-meta">${(ds.xOffsetSec / unitDivisor()).toFixed(3)}</td>
@@ -416,7 +428,7 @@ function rebuildChart() {
             if (!ds.availableKeys.includes(key)) return;
             const meta = SERIES.find(s => s.key === key);
             chartDatasets.push({
-                label: `${ds.name} · ${meta.label}`,
+                label: `${ds.name} \u00B7 ${meta.label}`,
                 data: seriesPoints(ds, key),
                 borderColor: rgba(ds.colorIndex, isActive ? 1 : 0.45),
                 backgroundColor: rgba(ds.colorIndex, isActive ? 1 : 0.45),
@@ -432,6 +444,22 @@ function rebuildChart() {
             });
         });
     });
+
+    const hasData = chartDatasets.length > 0;
+    const x = sensorChart.options.scales.x;
+    const y = sensorChart.options.scales.y;
+
+    if (hasData) {
+        // Let Chart.js autoscale to the data (unless the user has zoomed).
+        x.min = undefined; x.max = undefined;
+        y.min = undefined; y.max = undefined;
+    } else {
+        // Pin a clean, predictable empty frame and drop any zoom state.
+        if (sensorChart.resetZoom) sensorChart.resetZoom('none');
+        x.min = 0; x.max = 1;
+        y.min = 0; y.max = 1;
+    }
+    applyZoomAvailability(hasData);
 
     sensorChart.data.datasets = chartDatasets;
     sensorChart.options.scales.x.title.text = `Elapsed time (${unitLabel()})`;
@@ -560,14 +588,13 @@ function exportToCsv() {
 
 // --- Pan / zoom ---------------------------------------------------------
 function toggleZoomMode() {
-    const isPanEnabled = sensorChart.options.plugins.zoom.pan.enabled;
-    sensorChart.options.plugins.zoom.pan.enabled = !isPanEnabled;
-    sensorChart.options.plugins.zoom.zoom.drag.enabled = isPanEnabled;
+    zoomModeDrag = !zoomModeDrag;
+    applyZoomAvailability(sensorChart.data.datasets.length > 0);
 
     const canvas = document.getElementById('sensorChart');
     const zoomButton = document.getElementById('zoomButton');
 
-    if (sensorChart.options.plugins.zoom.zoom.drag.enabled) {
+    if (zoomModeDrag) {
         zoomButton.textContent = 'Zoom (Click to Pan)';
         zoomButton.style.backgroundColor = '#006400';
         zoomButton.style.borderColor = '#006400';
@@ -582,8 +609,11 @@ function toggleZoomMode() {
 }
 
 function resetZoom() {
+    if (sensorChart.data.datasets.length === 0) return;
     sensorChart.options.scales.x.min = undefined;
     sensorChart.options.scales.x.max = undefined;
+    sensorChart.options.scales.y.min = undefined;
+    sensorChart.options.scales.y.max = undefined;
     sensorChart.resetZoom();
     console.log('Zoom reset.');
 }
@@ -597,7 +627,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const xUnitSelect = document.getElementById('xUnitSelect');
 
     initChart();
-    toggleZoomMode();          // initialise button label/state
+    zoomModeDrag = false;
+    toggleZoomMode();          // flips to drag-zoom and sets the button label
     renderDatasetList();
 
     // --- Loading files ---
