@@ -1,4 +1,4 @@
-let version = "2026.07.30.2";
+let version = "2026.07.31.1";
 let sensorChart;
 
 // --- Series definitions -------------------------------------------------
@@ -232,7 +232,33 @@ function toNumberOrNull(raw) {
     return Number.isFinite(v) ? v : null;   // note: 0 is kept, unlike `|| null`
 }
 
-// Parses a Viewer-exported CSV into a dataset object.
+// Column matching is deliberately forgiving so that files written by the
+// Viewer, by this Analyzer, and by earlier Analyzer versions (which prefixed
+// every header with the dataset label) all load. A column counts as `key` if
+// it equals it or ends with it after a space or underscore separator.
+function findColumn(header, key) {
+    let idx = header.findIndex(h => h === key);
+    if (idx !== -1) return idx;
+    return header.findIndex(h => h.endsWith(' ' + key) || h.endsWith('_' + key));
+}
+
+// Recognises an elapsed-time column and how to convert it to seconds, e.g.
+// "elapsed_s", "time_min", "<label> time_h".
+const ELAPSED_UNITS = { s: 1, sec: 1, secs: 1, second: 1, seconds: 1,
+                        min: 60, mins: 60, minute: 60, minutes: 60,
+                        h: 3600, hr: 3600, hrs: 3600, hour: 3600, hours: 3600 };
+
+function findElapsedColumn(header) {
+    for (let i = 0; i < header.length; i++) {
+        const m = header[i].toLowerCase().match(/(?:^|[ _])(?:elapsed|time)[ _]?([a-z]+)$/);
+        if (m && (m[1] in ELAPSED_UNITS)) {
+            return { index: i, multiplier: ELAPSED_UNITS[m[1]] };
+        }
+    }
+    return null;
+}
+
+// Parses a Viewer- or Analyzer-exported CSV into a dataset object.
 // Throws on unusable input so the caller can report the offending file.
 function parseCsvText(text, fileName) {
     const clean = text.replace(/^\uFEFF/, '');            // strip BOM
@@ -240,13 +266,27 @@ function parseCsvText(text, fileName) {
     if (lines.length < 2) throw new Error('file contains no data rows');
 
     const header = splitCsvLine(lines[0]).map(h => h.trim());
-    let tsCol = header.findIndex(h => h.toLowerCase() === 'timestamp');
-    if (tsCol === -1) tsCol = 0;   // fall back to the first column
+
+    // Absolute time column, if the file has one.
+    let tsCol = header.findIndex(h => h.toLowerCase() === 'timestamp'
+                                   || h.toLowerCase().endsWith(' timestamp')
+                                   || h.toLowerCase().endsWith('_timestamp'));
+    // Elapsed-time column, used when there is no usable timestamp.
+    const elapsed = findElapsedColumn(header);
+
+    if (tsCol === -1 && !elapsed) {
+        // Last resort: treat column 0 as a timestamp if it parses as a date.
+        const first = splitCsvLine(lines[1])[0];
+        if (Number.isFinite(Date.parse(first))) tsCol = 0;
+    }
+    if (tsCol === -1 && !elapsed) {
+        throw new Error('no timestamp or elapsed-time column found');
+    }
 
     // Map every known series key to its column index, when present.
     const colOf = {};
     SERIES_KEYS.forEach(key => {
-        const idx = header.findIndex(h => h === key);
+        const idx = findColumn(header, key);
         if (idx !== -1) colOf[key] = idx;
     });
     if (Object.keys(colOf).length === 0) {
@@ -257,22 +297,33 @@ function parseCsvText(text, fileName) {
     let skipped = 0;
     for (let i = 1; i < lines.length; i++) {
         const cells = splitCsvLine(lines[i]);
-        const ms = Date.parse(cells[tsCol]);
-        if (!Number.isFinite(ms)) { skipped++; continue; }
+        let sec;
+        if (tsCol !== -1) {
+            const ms = Date.parse(cells[tsCol]);
+            if (!Number.isFinite(ms)) { skipped++; continue; }
+            sec = ms / 1000;
+        } else {
+            const raw = toNumberOrNull(cells[elapsed.index]);
+            if (raw === null) { skipped++; continue; }
+            sec = raw * elapsed.multiplier;
+        }
         const values = {};
         SERIES_KEYS.forEach(key => {
             values[key] = (key in colOf) ? toNumberOrNull(cells[colOf[key]]) : null;
         });
-        rows.push({ ms: ms, values: values });
+        rows.push({ sec: sec, values: values });
     }
-    if (rows.length === 0) throw new Error('no rows with a parsable timestamp');
+    if (rows.length === 0) throw new Error('no rows with a parsable time column');
 
-    rows.sort((a, b) => a.ms - b.ms);
-    const t0 = rows[0].ms;
+    rows.sort((a, b) => a.sec - b.sec);
+    const startSec = rows[0].sec;
 
-    const tSec = rows.map(r => (r.ms - t0) / 1000);   // starts at exactly 0
+    const tSec = rows.map(r => r.sec - startSec);   // starts at exactly 0
     const series = {};
     SERIES_KEYS.forEach(key => { series[key] = rows.map(r => r.values[key]); });
+
+    // Absolute start time is only known when the file carried timestamps.
+    const startMs = (tsCol !== -1) ? startSec * 1000 : null;
 
     const ds = {
         id: ++datasetCounter,
@@ -283,12 +334,12 @@ function parseCsvText(text, fileName) {
         styles: {},                 // per-series {color, width, point} overrides
         tSec: tSec,
         series: series,
-        raw: { tSec: tSec.slice(), series: series, startMs: t0 },
+        raw: { tSec: tSec.slice(), series: series, startMs: startMs },
         xOffsetSec: 0,
         yOffset: 0,
         visible: true,
         cropped: false,
-        startTime: new Date(t0),    // wall-clock time of the current t = 0
+        startTime: startMs === null ? null : new Date(startMs),  // wall clock at t = 0
         skippedRows: skipped
     };
     // Keep the raw series arrays independent of the working copies.
@@ -357,7 +408,7 @@ function renderDatasetList() {
             <td class="ds-meta">${dur.toFixed(2)} ${unitShort()}</td>
             <td class="ds-meta">${(ds.xOffsetSec / unitDivisor()).toFixed(3)}</td>
             <td class="ds-meta">${ds.yOffset.toFixed(3)}</td>
-            <td class="ds-meta">${ds.startTime.toLocaleTimeString()}</td>
+            <td class="ds-meta">${ds.startTime ? ds.startTime.toLocaleTimeString() : 'relative'}</td>
             <td><input type="checkbox" class="ds-visible" data-id="${ds.id}" ${ds.visible ? 'checked' : ''}></td>
             <td><button class="row-btn ds-remove" data-id="${ds.id}" title="Remove this dataset">&times;</button></td>
         </tr>`;
@@ -584,14 +635,15 @@ function cropToView() {
     SERIES_KEYS.forEach(key => { newSeries[key] = keep.map(i => ds.series[key][i]); });
 
     // The wall-clock time that the new t = 0 corresponds to.
-    ds.startTime = new Date(ds.startTime.getTime() + tStart * 1000);
+    if (ds.startTime) ds.startTime = new Date(ds.startTime.getTime() + tStart * 1000);
     ds.tSec = newT;
     ds.series = newSeries;
     ds.availableKeys = SERIES_KEYS.filter(k => ds.series[k].some(v => v !== null));
     ds.cropped = true;
     ds.xOffsetSec = 0;   // the crop itself re-zeroes time
 
-    console.log(`Cropped "${ds.label}" to ${newT.length} points, new t=0 at ${ds.startTime.toISOString()}.`);
+    console.log(`Cropped "${ds.label}" to ${newT.length} points, new t=0 at `
+                + (ds.startTime ? ds.startTime.toISOString() : `+${tStart}s (relative)`) + '.');
     refreshAll();
     resetZoom();
 }
@@ -603,7 +655,7 @@ function resetCrop() {
     ds.series = {};
     SERIES_KEYS.forEach(key => { ds.series[key] = ds.raw.series[key].slice(); });
     ds.availableKeys = SERIES_KEYS.filter(k => ds.series[k].some(v => v !== null));
-    ds.startTime = new Date(ds.raw.startMs);
+    ds.startTime = ds.raw.startMs === null ? null : new Date(ds.raw.startMs);
     ds.cropped = false;
     ds.xOffsetSec = 0;
     refreshAll();
@@ -722,53 +774,57 @@ function exportToPng() {
     sensorChart.update('none');
 }
 
-// Datasets rarely share a sampling grid, so the combined CSV writes one
-// block of columns per dataset side by side instead of interpolating.
-function buildCombinedCsv() {
-    const keys = selectedSeriesKeys();
-    const range = visibleXRange();
+// One CSV per visible dataset, in exactly the format the loader expects:
+// a `timestamp` column (when the absolute start time is known), an
+// `elapsed_s` column, then the plain series keys. Never label-prefixed, so an
+// exported file can always be loaded straight back in.
+function buildDatasetCsv(ds, range, applyOffsets) {
+    const keys = selectedSeriesKeys().filter(k => ds.availableKeys.includes(k));
+    if (keys.length === 0) return null;
+
     const div = unitDivisor();
-    const shown = datasets.filter(ds => ds.visible);
+    const xShift = applyOffsets ? ds.xOffsetSec : 0;
+    const yShift = applyOffsets ? ds.yOffset : 0;
+    const hasClock = !!ds.startTime;
 
-    if (shown.length === 0 || keys.length === 0) return null;
-
-    const blocks = [];
-    shown.forEach(ds => {
-        const cols = keys.filter(k => ds.availableKeys.includes(k));
-        if (cols.length === 0) return;
-        const rows = [];
-        for (let i = 0; i < ds.tSec.length; i++) {
-            const x = (ds.tSec[i] + ds.xOffsetSec) / div;
-            if (x < range.min || x > range.max) continue;
-            rows.push([x].concat(cols.map(k => {
-                const v = ds.series[k][i];
-                return v === null ? '' : (v + ds.yOffset);
-            })));
-        }
-        blocks.push({ ds: ds, cols: cols, rows: rows });
-    });
-
-    const nonEmpty = blocks.filter(b => b.rows.length > 0);
-    if (nonEmpty.length === 0) return null;
-
-    const header = [];
-    nonEmpty.forEach(b => {
-        header.push(`${b.ds.label} time_${unitShort()}`);
-        b.cols.forEach(k => header.push(`${b.ds.label} ${k}`));
-    });
-
-    const maxRows = Math.max(...nonEmpty.map(b => b.rows.length));
+    const header = (hasClock ? ['timestamp'] : []).concat(['elapsed_s'], keys);
     const lines = [header.join(',')];
-    for (let r = 0; r < maxRows; r++) {
+    let count = 0;
+
+    for (let i = 0; i < ds.tSec.length; i++) {
+        // Range test uses plotted coordinates, which always include offsets.
+        const xPlotted = (ds.tSec[i] + ds.xOffsetSec) / div;
+        if (xPlotted < range.min || xPlotted > range.max) continue;
+
+        const elapsed = ds.tSec[i] + xShift;
         const cells = [];
-        nonEmpty.forEach(b => {
-            const row = b.rows[r];
-            if (row) cells.push(...row);
-            else cells.push(...new Array(b.cols.length + 1).fill(''));
+        if (hasClock) cells.push(new Date(ds.startTime.getTime() + elapsed * 1000).toISOString());
+        cells.push(elapsed);
+        keys.forEach(k => {
+            const v = ds.series[k][i];
+            cells.push(v === null ? '' : (v + yShift));
         });
         lines.push(cells.join(','));
+        count++;
     }
-    return { text: lines.join('\n') + '\n', blocks: nonEmpty, full: range.full };
+    if (count === 0) return null;
+    return { text: lines.join('\n') + '\n', rows: count, keys: keys };
+}
+
+function safeFileName(s) {
+    return String(s).replace(/[^A-Za-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'dataset';
+}
+
+function downloadText(text, fileName) {
+    const blob = new Blob([text], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 function exportToCsv() {
@@ -776,23 +832,34 @@ function exportToCsv() {
         alert('No data to export. Load a CSV first.');
         return;
     }
-    const result = buildCombinedCsv();
-    if (!result) {
+    const shown = datasets.filter(ds => ds.visible);
+    if (shown.length === 0) {
+        alert('No visible dataset to export.');
+        return;
+    }
+    const range = visibleXRange();
+    const applyOffsets = document.getElementById('applyOffsetsCheckbox').checked;
+
+    const files = [];
+    shown.forEach(ds => {
+        const built = buildDatasetCsv(ds, range, applyOffsets);
+        if (built) files.push({ ds: ds, built: built });
+    });
+
+    if (files.length === 0) {
         alert('Nothing to export.\nCheck that a series is selected and that data falls inside the visible range,\nor tick "Full data".');
         return;
     }
-    const total = result.blocks.reduce((n, b) => n + b.rows.length, 0);
-    console.log(`Exporting ${total} rows from ${result.blocks.length} dataset(s) (${result.full ? 'full data' : 'visible range'}).`);
 
-    const blob = new Blob([result.text], { type: 'text/csv;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = new Date().toISOString() + '_analyzer-data.csv';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+    // Each dataset becomes its own file: a single side-by-side sheet could not
+    // be loaded back, since datasets do not share a sampling grid.
+    files.forEach((f, i) => {
+        const stamp = (f.ds.startTime || new Date()).toISOString();
+        const name = `${stamp}_${safeFileName(f.ds.label)}_analyzer-data.csv`;
+        setTimeout(() => downloadText(f.built.text, name), i * 250);
+        console.log(`Exporting "${f.ds.label}": ${f.built.rows} rows`
+            + ` (${range.full ? 'full data' : 'visible range'}, offsets ${applyOffsets ? 'applied' : 'not applied'}) -> ${name}`);
+    });
 }
 
 // --- Pan / zoom ---------------------------------------------------------
