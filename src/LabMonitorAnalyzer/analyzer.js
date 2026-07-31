@@ -1,4 +1,4 @@
-let version = "2026.07.31.1";
+let version = "2026.07.31.2";
 let sensorChart;
 
 // --- Series definitions -------------------------------------------------
@@ -35,6 +35,11 @@ const datasets = [];
 let activeId = null;
 let datasetCounter = 0;
 let zoomModeDrag = true;   // true = box-zoom on drag, false = pan on drag
+let emptyFramePinned = false;   // true while the blank 0..1 frame is forced
+// Legend visibility, keyed "<datasetId>|<seriesKey>". Chart.js tracks hidden
+// state by dataset index and by object identity, both of which change on every
+// rebuild, so it has to live here to survive one.
+const hiddenCurves = new Set();
 
 // Pan/zoom is meaningless with an empty chart: scrolling the page with the
 // cursor over the canvas would otherwise wheel-zoom the blank axes and leave
@@ -59,6 +64,13 @@ function unitLabel() {
 function unitShort() {
     const d = unitDivisor();
     return d === 1 ? 's' : (d === 60 ? 'min' : 'h');
+}
+
+// Lowest palette entry not already in use, so removing and re-adding a
+// dataset cannot produce two identically coloured curves.
+function nextFreeColor() {
+    const used = new Set(datasets.map(d => d.baseColor));
+    return PALETTE.find(c => !used.has(c)) || PALETTE[datasets.length % PALETTE.length];
 }
 
 function getActive() {
@@ -155,7 +167,8 @@ function initChart() {
         options: {
             responsive: true,
             maintainAspectRatio: true,
-            parsing: false,          // data is already {x, y}
+            // Object data is parsed by Chart.js so that null y values become
+            // genuine gaps rather than NaN pixels.
             normalized: true,
             scales: {
                 x: {
@@ -176,7 +189,18 @@ function initChart() {
                         label: (item) => `${item.dataset.label}: ${item.parsed.y}`
                     }
                 },
-                legend: { position: 'top' },
+                legend: {
+                    position: 'top',
+                    // Remember hiding per dataset+series instead of per index.
+                    onClick: (ev, item, legend) => {
+                        const d = legend.chart.data.datasets[item.datasetIndex];
+                        if (!d) return;
+                        const id = `${d._dsId}|${d._key}`;
+                        if (hiddenCurves.has(id)) hiddenCurves.delete(id);
+                        else hiddenCurves.add(id);
+                        rebuildChart();
+                    }
+                },
                 zoom: {
                     zoom: {
                         wheel: { enabled: true },
@@ -237,9 +261,11 @@ function toNumberOrNull(raw) {
 // every header with the dataset label) all load. A column counts as `key` if
 // it equals it or ends with it after a space or underscore separator.
 function findColumn(header, key) {
-    let idx = header.findIndex(h => h === key);
+    const lower = header.map(h => h.toLowerCase());
+    const k = key.toLowerCase();
+    let idx = lower.indexOf(k);
     if (idx !== -1) return idx;
-    return header.findIndex(h => h.endsWith(' ' + key) || h.endsWith('_' + key));
+    return lower.findIndex(h => h.endsWith(' ' + k) || h.endsWith('_' + k));
 }
 
 // Recognises an elapsed-time column and how to convert it to seconds, e.g.
@@ -251,7 +277,7 @@ const ELAPSED_UNITS = { s: 1, sec: 1, secs: 1, second: 1, seconds: 1,
 function findElapsedColumn(header) {
     for (let i = 0; i < header.length; i++) {
         const m = header[i].toLowerCase().match(/(?:^|[ _])(?:elapsed|time)[ _]?([a-z]+)$/);
-        if (m && (m[1] in ELAPSED_UNITS)) {
+        if (m && Object.prototype.hasOwnProperty.call(ELAPSED_UNITS, m[1])) {
             return { index: i, multiplier: ELAPSED_UNITS[m[1]] };
         }
     }
@@ -277,7 +303,11 @@ function parseCsvText(text, fileName) {
     if (tsCol === -1 && !elapsed) {
         // Last resort: treat column 0 as a timestamp if it parses as a date.
         const first = splitCsvLine(lines[1])[0];
-        if (Number.isFinite(Date.parse(first))) tsCol = 0;
+        // Require date-like punctuation: Date.parse('12.5') happily returns
+        // Dec 2001, which would turn an elapsed-time column into years.
+        if (/\d{4}-\d{2}-\d{2}|[T:]/.test(first) && Number.isFinite(Date.parse(first))) {
+            tsCol = 0;
+        }
     }
     if (tsCol === -1 && !elapsed) {
         throw new Error('no timestamp or elapsed-time column found');
@@ -307,6 +337,7 @@ function parseCsvText(text, fileName) {
             if (raw === null) { skipped++; continue; }
             sec = raw * elapsed.multiplier;
         }
+        if (!Number.isFinite(sec)) { skipped++; continue; }
         const values = {};
         SERIES_KEYS.forEach(key => {
             values[key] = (key in colOf) ? toNumberOrNull(cells[colOf[key]]) : null;
@@ -329,8 +360,7 @@ function parseCsvText(text, fileName) {
         id: ++datasetCounter,
         name: fileName,
         label: fileName.replace(/\.csv$/i, ''),
-        colorIndex: datasetCounter - 1,
-        baseColor: PALETTE[(datasetCounter - 1) % PALETTE.length],
+        baseColor: nextFreeColor(),
         styles: {},                 // per-series {color, width, point} overrides
         tSec: tSec,
         series: series,
@@ -360,6 +390,9 @@ async function handleFiles(fileList) {
         try {
             const text = await file.text();
             const ds = parseCsvText(text, file.name);
+            if (ds.skippedRows > 0) {
+                console.warn(`${file.name}: ${ds.skippedRows} row(s) skipped (unparsable time column).`);
+            }
             datasets.push(ds);
             activeId = ds.id;
             added++;
@@ -404,7 +437,7 @@ function renderDatasetList() {
         html += `<tr class="${isActive ? 'active-row' : ''}" data-id="${ds.id}">
             <td><span class="swatch" style="background:${ds.baseColor}"></span></td>
             <td><span class="ds-name" title="${escapeHtml(ds.name)}">${escapeHtml(ds.label)}</span>${cropTag}</td>
-            <td class="ds-meta">${ds.tSec.length}</td>
+            <td class="ds-meta" title="${ds.skippedRows} row(s) skipped while loading">${ds.tSec.length}${ds.skippedRows ? '*' : ''}</td>
             <td class="ds-meta">${dur.toFixed(2)} ${unitShort()}</td>
             <td class="ds-meta">${(ds.xOffsetSec / unitDivisor()).toFixed(3)}</td>
             <td class="ds-meta">${ds.yOffset.toFixed(3)}</td>
@@ -528,6 +561,7 @@ function removeDataset(id) {
     const idx = datasets.findIndex(d => d.id === id);
     if (idx === -1) return;
     datasets.splice(idx, 1);
+    SERIES_KEYS.forEach(k => hiddenCurves.delete(`${id}|${k}`));
     if (activeId === id) {
         activeId = datasets.length ? datasets[Math.min(idx, datasets.length - 1)].id : null;
     }
@@ -538,6 +572,7 @@ function clearAll() {
     if (datasets.length === 0) return;
     datasets.length = 0;
     activeId = null;
+    hiddenCurves.clear();
     refreshAll();
     console.log('All datasets cleared.');
 }
@@ -608,8 +643,12 @@ function zeroAlign() {
 function cropToView() {
     const ds = getActive();
     if (!ds) return;
+    if (!ds.visible) {
+        alert('The active dataset is hidden, so the visible range does not describe it.\nTick its "Show" box before cropping.');
+        return;
+    }
     const x = sensorChart.scales.x;
-    if (!x) return;
+    if (!x || !Number.isFinite(x.min) || !Number.isFinite(x.max)) return;
 
     // Plotted x = (tSec + xOffsetSec) / divisor  =>  invert for tSec limits.
     const div = unitDivisor();
@@ -640,6 +679,7 @@ function cropToView() {
     ds.series = newSeries;
     ds.availableKeys = SERIES_KEYS.filter(k => ds.series[k].some(v => v !== null));
     ds.cropped = true;
+    if (!('xOffsetSec' in ds.raw)) ds.raw.xOffsetSec = ds.xOffsetSec;  // for Reset Crop
     ds.xOffsetSec = 0;   // the crop itself re-zeroes time
 
     console.log(`Cropped "${ds.label}" to ${newT.length} points, new t=0 at `
@@ -657,7 +697,8 @@ function resetCrop() {
     ds.availableKeys = SERIES_KEYS.filter(k => ds.series[k].some(v => v !== null));
     ds.startTime = ds.raw.startMs === null ? null : new Date(ds.raw.startMs);
     ds.cropped = false;
-    ds.xOffsetSec = 0;
+    ds.xOffsetSec = Number.isFinite(ds.raw.xOffsetSec) ? ds.raw.xOffsetSec : 0;
+    delete ds.raw.xOffsetSec;
     refreshAll();
     resetZoom();
 }
@@ -669,8 +710,12 @@ function seriesPoints(ds, key) {
     const vals = ds.series[key];
     const pts = [];
     for (let i = 0; i < t.length; i++) {
-        if (vals[i] === null) continue;   // gaps stay gaps
-        pts.push({ x: (t[i] + ds.xOffsetSec) / div, y: vals[i] + ds.yOffset });
+        // null is kept as null so a dropout renders as a gap, not a straight
+        // line interpolated across it.
+        pts.push({
+            x: (t[i] + ds.xOffsetSec) / div,
+            y: vals[i] === null ? null : vals[i] + ds.yOffset
+        });
     }
     return pts;
 }
@@ -698,7 +743,8 @@ function rebuildChart() {
                 pointRadius: st.point,
                 fill: false,
                 tension: 0.1,
-                spanGaps: true,
+                spanGaps: false,          // a dropout is drawn as a break
+                hidden: hiddenCurves.has(`${ds.id}|${key}`),
                 order: isActive ? 0 : 1,
                 _dsId: ds.id,
                 _key: key
@@ -711,14 +757,21 @@ function rebuildChart() {
     const y = sensorChart.options.scales.y;
 
     if (hasData) {
-        // Let Chart.js autoscale to the data (unless the user has zoomed).
-        x.min = undefined; x.max = undefined;
-        y.min = undefined; y.max = undefined;
+        // Release the pinned empty frame, but otherwise leave the axis limits
+        // alone: the zoom plugin keeps the current zoom/pan window in exactly
+        // these options, so clearing them here would undo every zoom whenever
+        // an offset, colour or checkbox changed.
+        if (emptyFramePinned) {
+            x.min = undefined; x.max = undefined;
+            y.min = undefined; y.max = undefined;
+            emptyFramePinned = false;
+        }
     } else {
         // Pin a clean, predictable empty frame and drop any zoom state.
         if (sensorChart.resetZoom) sensorChart.resetZoom('none');
         x.min = 0; x.max = 1;
         y.min = 0; y.max = 1;
+        emptyFramePinned = true;
     }
     applyZoomAvailability(hasData);
 
@@ -767,8 +820,10 @@ function exportToPng() {
 
     const link = document.createElement('a');
     link.href = tmp.toDataURL('image/png');
-    link.download = new Date().toISOString() + '_analyzer-plot.png';
+    link.download = stampForFileName(new Date()) + '_analyzer-plot.png';
+    document.body.appendChild(link);
     link.click();
+    document.body.removeChild(link);
 
     sensorChart.options.plugins.title = { display: false };
     sensorChart.update('none');
@@ -809,6 +864,11 @@ function buildDatasetCsv(ds, range, applyOffsets) {
     }
     if (count === 0) return null;
     return { text: lines.join('\n') + '\n', rows: count, keys: keys };
+}
+
+// Colons are illegal in filenames on Windows and get mangled elsewhere.
+function stampForFileName(date) {
+    return (date || new Date()).toISOString().replace(/:/g, '-');
 }
 
 function safeFileName(s) {
@@ -854,9 +914,9 @@ function exportToCsv() {
     // Each dataset becomes its own file: a single side-by-side sheet could not
     // be loaded back, since datasets do not share a sampling grid.
     files.forEach((f, i) => {
-        const stamp = (f.ds.startTime || new Date()).toISOString();
-        const name = `${stamp}_${safeFileName(f.ds.label)}_analyzer-data.csv`;
-        setTimeout(() => downloadText(f.built.text, name), i * 250);
+        const name = `${stampForFileName(f.ds.startTime)}_${safeFileName(f.ds.label)}_analyzer-data.csv`;
+        // Browsers throttle bursts of programmatic downloads; keep them spaced.
+        setTimeout(() => downloadText(f.built.text, name), i * 600);
         console.log(`Exporting "${f.ds.label}": ${f.built.rows} rows`
             + ` (${range.full ? 'full data' : 'visible range'}, offsets ${applyOffsets ? 'applied' : 'not applied'}) -> ${name}`);
     });
@@ -938,7 +998,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('dsLabelInput').addEventListener('change', function () {
         const ds = getActive();
         if (!ds) return;
-        ds.label = this.value.trim() || ds.name;
+        ds.label = this.value.trim() || ds.name.replace(/\.csv$/i, '');
         renderDatasetList();
         rebuildChart();
     });

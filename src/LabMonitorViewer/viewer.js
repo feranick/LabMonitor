@@ -1,4 +1,4 @@
-let version = "2026.07.30.1";
+let version = "2026.07.31.1";
 let sensorChart;
 let hoveredDataIndex = -1;
 let nameSelIndex="LabMonitorViewer_device_dropdown";
@@ -19,6 +19,13 @@ const chartDataStore = {
     sens3_RH: [],
     userComments: []
 };
+
+// Parses a stored reading. Deliberately not `parseFloat(v) || null`, which
+// would turn a legitimate reading of 0 into a gap.
+function toNumberOrNull(v) {
+    const n = parseFloat(v);
+    return Number.isFinite(n) ? n : null;
+}
 
 // --- Chart Initialization ---
 function initChart() {
@@ -157,14 +164,14 @@ async function fetchAndDisplayData() {
             // Derive the ISO label from UTC so CSV timestamps and export
             // filenames are always valid regardless of stored field names.
             chartDataStore.isoLabels.push(timestamp.toISOString());
-            chartDataStore.sens1_Temp.push(parseFloat(point.sens1_Temp) || null);
-            chartDataStore.sens1_RH.push(parseFloat(point.sens1_RH) || null);
-            chartDataStore.sens1_HI.push(parseFloat(point.sens1_HI) || null);
-            chartDataStore.sens1_WBT.push(parseFloat(s1_WBT_string) || null);
-            chartDataStore.sens2_Temp.push(parseFloat(point.sens2_Temp) || null);
-            chartDataStore.sens2_RH.push(parseFloat(point.sens2_RH) || null);
-            chartDataStore.sens3_Temp.push(parseFloat(point.sens3_Temp) || null);
-            chartDataStore.sens3_RH.push(parseFloat(point.sens3_RH) || null);
+            chartDataStore.sens1_Temp.push(toNumberOrNull(point.sens1_Temp));
+            chartDataStore.sens1_RH.push(toNumberOrNull(point.sens1_RH));
+            chartDataStore.sens1_HI.push(toNumberOrNull(point.sens1_HI));
+            chartDataStore.sens1_WBT.push(toNumberOrNull(s1_WBT_string));
+            chartDataStore.sens2_Temp.push(toNumberOrNull(point.sens2_Temp));
+            chartDataStore.sens2_RH.push(toNumberOrNull(point.sens2_RH));
+            chartDataStore.sens3_Temp.push(toNumberOrNull(point.sens3_Temp));
+            chartDataStore.sens3_RH.push(toNumberOrNull(point.sens3_RH));
             chartDataStore.userComments.push(point.user_comment || "");
         });
 
@@ -228,8 +235,6 @@ async function setDeviceNames() {
     });
     
     // Process cookie for device dropdown
-    selIndex = deviceDropdown.selectedIndex;
-
     let indexToSet = 0; // Default to the first option
     const devCookieValue = getCookie("nameSelIndex");
 
@@ -281,6 +286,14 @@ function clearPlot() {
     chartDataStore.sens2_RH = [];
     chartDataStore.sens3_Temp = [];
     chartDataStore.sens3_RH = [];
+    // Was previously left populated, so the hover box showed stale comments
+    // from the previous fetch after a Clear.
+    chartDataStore.userComments = [];
+
+    // Drop the bounds pinned by the last fetch, otherwise the empty plot keeps
+    // showing the old time range.
+    sensorChart.options.scales.x.min = undefined;
+    sensorChart.options.scales.x.max = undefined;
 
     sensorChart.data.labels = [];
     sensorChart.data.datasets.forEach(dataset => {
@@ -341,8 +354,10 @@ function exportToPng() {
     const link = document.createElement('a');
     link.href = tmp.toDataURL('image/png');
     const pngRange = getExportRange();
-    link.download = (chartDataStore.isoLabels[pngRange.end - 1] || 'export') + '_sensor-plot.png';
+    link.download = safeFileName(chartDataStore.isoLabels[pngRange.end - 1]) + '_sensor-plot.png';
+    document.body.appendChild(link);
     link.click();
+    document.body.removeChild(link);
 
     sensorChart.options.plugins.title = { display: false };
     sensorChart.update('none');
@@ -362,7 +377,7 @@ function exportToCsv() {
     console.log(`Exporting ${range.end - range.start} of ${chartDataStore.isoLabels.length} points (${range.full ? 'full data' : 'visible range'}).`);
 
     const headers = ['timestamp', 'sens1_Temp', 'sens2_Temp', 'sens1_RH', 'sens1_WBT', 'sens1_HI', 'sens2_RH', 'sens3_Temp', 'sens3_RH'];
-    let csvContent = "data:text/csv;charset=utf-8," + headers.join(',') + "\n";
+    let csvContent = headers.join(',') + "\n";
 
     for (let i = range.start; i < range.end; i++) {
         const row = [
@@ -379,13 +394,22 @@ function exportToCsv() {
         csvContent += row.join(',') + "\n";
     }
 
-    const encodedUri = encodeURI(csvContent);
+    // A Blob URL avoids the length limit of a data: URI and needs no encoding,
+    // where encodeURI() would also have left a literal '#' truncating the file.
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', chartDataStore.isoLabels[range.end - 1] + '_sensor-data.csv');
+    link.href = url;
+    link.download = safeFileName(chartDataStore.isoLabels[range.end - 1]) + '_sensor-data.csv';
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+// Colons are illegal in filenames on Windows and get rewritten elsewhere.
+function safeFileName(s) {
+    return String(s || 'export').replace(/:/g, '-');
 }
 
 // Function to toggle between Pan and Box Zoom modes
@@ -675,13 +699,19 @@ function getWebBulbTemp(temp, rh, type) {
 
 // Cookie Utilities
 function getCookie(name) {
-  return (name = (document.cookie + ';').match(new RegExp(name + '=.*;'))) && name[0].split(/=|;/)[1];
+  // Anchored to a cookie boundary and escaped, so one cookie name cannot match
+  // another that merely contains it.
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const m = document.cookie.match(new RegExp('(?:^|;\\s*)' + escaped + '=([^;]*)'));
+  return m ? decodeURIComponent(m[1]) : null;
 }
 
 function setCookie(name, value, days) {
   var e = new Date;
   e.setDate(e.getDate() + (days || 365));
-  document.cookie = name + '=' + value + ';expires=' + e.toUTCString() + ';path=/;domain=.' + document.domain;
+  // No explicit domain: '.localhost' and bare IPs are rejected by browsers,
+  // which silently dropped every setting during local testing.
+  document.cookie = name + '=' + encodeURIComponent(value) + ';expires=' + e.toUTCString() + ';path=/';
 }
 
 function cookieExists(cookieName) {
