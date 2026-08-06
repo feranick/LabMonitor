@@ -1,4 +1,6 @@
-let version = "2026.08.05.1";
+let version = "2026.08.06.1";
+
+const NO_COMMENT_TOKEN = "NO COMMENT";
 let sensorChart;
 let hoveredDataIndex = -1;
 let nameSelIndex="LabMonitorViewer_device_dropdown";
@@ -376,8 +378,21 @@ function exportToCsv() {
     }
     console.log(`Exporting ${range.end - range.start} of ${chartDataStore.isoLabels.length} points (${range.full ? 'full data' : 'visible range'}).`);
 
+    // Only carry a comment column when the exported range actually has one,
+    // so files from comment-free runs look exactly as they always did.
+    let hasComments = false;
+    for (let i = range.start; i < range.end; i++) {
+        if (normalizeComment(chartDataStore.userComments[i]) !== "") { hasComments = true; break; }
+    }
+
     const headers = ['timestamp', 'sens1_Temp', 'sens2_Temp', 'sens1_RH', 'sens1_WBT', 'sens1_HI', 'sens2_RH', 'sens3_Temp', 'sens3_RH'];
+    if (hasComments) headers.push('comment');
     let csvContent = headers.join(',') + "\n";
+
+    // Change-only ("run length") encoding: the comment is written on the first
+    // exported row and thereafter only when it differs from the previous row.
+    // A reader forward-fills blanks, so a long constant comment costs one cell.
+    let previousComment = null;
 
     for (let i = range.start; i < range.end; i++) {
         const row = [
@@ -391,7 +406,17 @@ function exportToCsv() {
             chartDataStore.sens3_Temp[i],
             chartDataStore.sens3_RH[i]
         ];
-        csvContent += row.join(',') + "\n";
+
+        if (hasComments) {
+            const current = normalizeComment(chartDataStore.userComments[i]);
+            // previousComment === null on the first exported row: the value is
+            // always written out, so a visible-range export still states the
+            // comment that was already running when the window opens.
+            row.push(encodeCommentCell(current, previousComment));
+            previousComment = current;
+        }
+
+        csvContent += row.map(csvCell).join(',') + "\n";
     }
 
     // A Blob URL avoids the length limit of a data: URI and needs no encoding,
@@ -405,6 +430,33 @@ function exportToCsv() {
     link.click();
     document.body.removeChild(link);
     setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+// Quotes a single CSV field. Numbers and nulls come through unchanged (null
+// becomes an empty cell, as it did when rows were plain-joined), while free
+// text is wrapped whenever it contains a separator, a quote or a newline.
+function csvCell(v) {
+    if (v === null || v === undefined) return '';
+    const s = String(v);
+    return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+
+// A stored comment reduced to its meaning: the empty string means "no comment",
+// whether the database held "", whitespace or the legacy "NO COMMENT" text.
+function normalizeComment(c) {
+    const s = String(c === null || c === undefined ? '' : c).trim();
+    return s.toUpperCase() === NO_COMMENT_TOKEN ? '' : s;
+}
+
+// The cell to write for `current`, given the comment written on the previous
+// exported row (null on the first row, which is always written explicitly).
+//   ""              -> nothing to say and nothing to cancel: blank
+//   same as before  -> blank, and the reader forward-fills
+//   newly empty     -> the sentinel, which cancels the run above
+function encodeCommentCell(current, previous) {
+    if (previous === null) return current;          // first exported row
+    if (current === previous) return '';            // unchanged: inherit
+    return current === '' ? NO_COMMENT_TOKEN : current;
 }
 
 // Colons are illegal in filenames on Windows and get rewritten elsewhere.
@@ -625,7 +677,7 @@ const FixedInfoPlugin = {
         const rh1 = chartDataStore.sens1_RH[index];
         const temp2 = chartDataStore.sens2_Temp[index];
         const temp3 = chartDataStore.sens3_Temp[index];
-        const comment = (chartDataStore.userComments[index] || "").trim();
+        const comment = normalizeComment(chartDataStore.userComments[index]);
 
         // --- Prepare Text Lines ---
         let lines = [
@@ -638,8 +690,9 @@ const FixedInfoPlugin = {
             `S3 Temp: ${temp3 !== null ? temp3 + ' \u00B0C' : '--'}`,
         ];
         
-        // Add comment only if it exists and isn't the default placeholder
-        if (comment.length > 0 && comment.toUpperCase() !== "NO COMMENT") {
+        // Add comment only if it exists (normalizeComment already folds the
+        // "NO COMMENT" placeholder into the empty string)
+        if (comment.length > 0) {
             lines.push(`Comment: "${comment}"`);
         }
 
@@ -732,4 +785,3 @@ function cookieExists(cookieName) {
   }
   return false; // Cookie not found
 }
-
