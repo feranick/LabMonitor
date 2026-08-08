@@ -1,68 +1,4 @@
-let version = "2026.08.06.2";
-
-// --- Comments -----------------------------------------------------------
-// The Viewer writes per-point comments in a single `comment` column using
-// change-only encoding: the text appears on the first row and thereafter only
-// where it differs from the row above, so a comment that holds for a thousand
-// points costs one cell. A blank cell therefore means "same as the row above",
-// and the sentinel below is what ends a run when the following points carry no
-// comment at all.
-const NO_COMMENT_TOKEN = 'NO COMMENT';
-
-function normalizeComment(c) {
-    const s = String(c === null || c === undefined ? '' : c).trim();
-    return s.toUpperCase() === NO_COMMENT_TOKEN ? '' : s;
-}
-
-function encodeCommentCell(current, previous) {
-    if (previous === null) return current;          // first exported row
-    if (current === previous) return '';            // unchanged: inherit
-    return current === '' ? NO_COMMENT_TOKEN : current;
-}
-
-// Greedy word wrap, so a long comment becomes a few tooltip lines instead of
-// one line wider than the plot. A word longer than the limit is left intact
-// rather than hyphenated: sensor names and paths are worse for being broken.
-const TOOLTIP_WRAP = 52;
-
-function wrapText(text, width) {
-    const limit = width || TOOLTIP_WRAP;
-    const lines = [];
-    String(text).split(/\s+/).forEach(word => {
-        if (word === '') return;
-        const last = lines.length - 1;
-        if (last >= 0 && lines[last].length + 1 + word.length <= limit) {
-            lines[last] += ' ' + word;
-        } else {
-            lines.push(word);
-        }
-    });
-    return lines.length ? lines : [''];
-}
-
-// Comment lines for the points under the cursor. Returned as an array so
-// Chart.js renders one tooltip row per line; empty when nothing is annotated,
-// which leaves the tooltip exactly as it was before.
-function tooltipCommentLines(items) {
-    const seen = [];
-    (items || []).forEach(item => {
-        const meta = item.dataset || {};
-        const ds = datasets.find(d => d.id === meta._dsId);
-        if (!ds || !ds.comments) return;
-        const text = ds.comments[item.dataIndex] || '';
-        if (text === '') return;
-        // Name the dataset only when more than one is loaded, otherwise the
-        // label is just noise repeated under every hover.
-        const prefix = datasets.length > 1 ? ds.label + ': ' : '';
-        const entry = prefix + text;
-        if (seen.indexOf(entry) === -1) seen.push(entry);
-    });
-    if (seen.length === 0) return [];
-    // A leading blank line separates the notes from the value rows above.
-    const out = [''];
-    seen.forEach(entry => { wrapText(entry).forEach(l => out.push(l)); });
-    return out;
-}
+let version = "2026.08.07.1";
 let sensorChart;
 
 // --- Series definitions -------------------------------------------------
@@ -218,8 +154,37 @@ function curveStyle(ds, key) {
     return {
         color: override.color || defaultCurveColor(ds, key),
         width: Number.isFinite(override.width) ? override.width : DEFAULT_WIDTH,
-        point: Number.isFinite(override.point) ? override.point : DEFAULT_POINT
+        point: Number.isFinite(override.point) ? override.point : DEFAULT_POINT,
+        name: override.name || ''
     };
+}
+
+// Text shown in the legend: the user's own wording if they set one, otherwise
+// "<dataset label> - <series>".
+function defaultCurveLabel(ds, key) {
+    const meta = SERIES.find(s => s.key === key);
+    return `${ds.label} - ${meta.label}`;
+}
+
+function curveLabel(ds, key) {
+    const name = (ds.styles[key] || {}).name;
+    return (name && name.trim()) ? name.trim() : defaultCurveLabel(ds, key);
+}
+
+// Renames the curve behind a legend entry (double-click on the legend).
+function renameCurveAt(datasetIndex) {
+    const d = sensorChart.data.datasets[datasetIndex];
+    if (!d) return;
+    const ds = datasets.find(x => x.id === d._dsId);
+    if (!ds) return;
+    const proposed = window.prompt(
+        'Legend text for this curve (leave empty to restore the default):',
+        curveLabel(ds, d._key));
+    if (proposed === null) return;                 // cancelled
+    ds.styles[d._key] = Object.assign({}, ds.styles[d._key], { name: proposed.trim() });
+    if (ds.id !== activeId) setActive(ds.id);
+    renderCurveStyles();
+    rebuildChart();
 }
 
 // --- Chart Initialization ----------------------------------------------
@@ -250,9 +215,7 @@ function initChart() {
                     enabled: true,
                     callbacks: {
                         title: (items) => `t = ${items[0].parsed.x.toFixed(3)} ${unitShort()}`,
-                        label: (item) => `${item.dataset.label}: ${item.parsed.y}`,
-                        // The comment in force at the hovered point, wrapped.
-                        afterBody: (items) => tooltipCommentLines(items)
+                        label: (item) => `${item.dataset.label}: ${item.parsed.y}`
                     }
                 },
                 legend: {
@@ -389,22 +352,10 @@ function parseCsvText(text, fileName) {
         throw new Error('no recognised sensor columns (expected e.g. sens1_Temp)');
     }
 
-    // Optional comment column. `findColumn` also accepts a label-prefixed
-    // header and the database's own `user_comment` spelling.
-    const commentCol = findColumn(header, 'comment');
-
     const rows = [];
     let skipped = 0;
-    // Forward-fill state for the change-only comment encoding. Updated in file
-    // order, and before any row is skipped, so a comment that starts on a row
-    // with an unreadable timestamp still applies to the rows after it.
-    let carriedComment = '';
     for (let i = 1; i < lines.length; i++) {
         const cells = splitCsvLine(lines[i]);
-        if (commentCol !== -1) {
-            const cell = String(cells[commentCol] === undefined ? '' : cells[commentCol]).trim();
-            if (cell !== '') carriedComment = normalizeComment(cell);
-        }
         let sec;
         if (tsCol !== -1) {
             const ms = Date.parse(cells[tsCol]);
@@ -420,7 +371,7 @@ function parseCsvText(text, fileName) {
         SERIES_KEYS.forEach(key => {
             values[key] = (key in colOf) ? toNumberOrNull(cells[colOf[key]]) : null;
         });
-        rows.push({ sec: sec, values: values, comment: carriedComment });
+        rows.push({ sec: sec, values: values });
     }
     if (rows.length === 0) throw new Error('no rows with a parsable time column');
 
@@ -430,9 +381,6 @@ function parseCsvText(text, fileName) {
     const tSec = rows.map(r => r.sec - startSec);   // starts at exactly 0
     const series = {};
     SERIES_KEYS.forEach(key => { series[key] = rows.map(r => r.values[key]); });
-    // Expanded one entry per point, so a crop or a partial export can simply
-    // slice it like any series.
-    const comments = rows.map(r => r.comment);
 
     // Absolute start time is only known when the file carried timestamps.
     const startMs = (tsCol !== -1) ? startSec * 1000 : null;
@@ -445,9 +393,7 @@ function parseCsvText(text, fileName) {
         styles: {},                 // per-series {color, width, point} overrides
         tSec: tSec,
         series: series,
-        comments: comments,
-        hasCommentColumn: commentCol !== -1,
-        raw: { tSec: tSec.slice(), series: series, comments: comments.slice(), startMs: startMs },
+        raw: { tSec: tSec.slice(), series: series, startMs: startMs },
         xOffsetSec: 0,
         yOffset: 0,
         visible: true,
@@ -504,11 +450,6 @@ function renderDatasetList() {
     const table = document.getElementById('datasetList');
     const select = document.getElementById('activeDatasetSelect');
 
-    // The comment panel shows the active dataset in the current time unit and
-    // with the current offsets, i.e. it depends on exactly what this table
-    // depends on. Refreshing it from here keeps the two from drifting apart.
-    renderComments();
-
     if (datasets.length === 0) {
         table.innerHTML = '<tr><td class="empty-note">No datasets loaded. Use "Load CSV..." or drop files on the plot.</td></tr>';
         select.innerHTML = '<option value="">&mdash; none &mdash;</option>';
@@ -516,16 +457,12 @@ function renderDatasetList() {
     }
 
     let html = '<tr><th></th><th>Dataset</th><th>Points</th><th>Duration</th>'
-             + '<th>X off</th><th>Y off</th><th>Starts</th><th>Notes</th><th>Show</th><th></th></tr>';
+             + '<th>X off</th><th>Y off</th><th>Starts</th><th>Show</th><th></th></tr>';
     datasets.forEach(ds => {
         const dur = ds.tSec.at(-1) / unitDivisor();
         const isActive = ds.id === activeId;
         const cropTag = ds.cropped
             ? ` <span class="tag-crop" title="Cropped: ${ds.raw.tSec.length} points in the file">CROP</span>` : '';
-        const runs = commentRuns(ds);
-        const notes = !ds.hasCommentColumn
-            ? '<span title="This file has no comment column">&ndash;</span>'
-            : `<span title="${runs.length} comment run(s) in this dataset">${runs.length}</span>`;
         html += `<tr class="${isActive ? 'active-row' : ''}" data-id="${ds.id}">
             <td><span class="swatch" style="background:${ds.baseColor}"></span></td>
             <td><span class="ds-name" title="${escapeHtml(ds.name)}">${escapeHtml(ds.label)}</span>${cropTag}</td>
@@ -534,7 +471,6 @@ function renderDatasetList() {
             <td class="ds-meta">${(ds.xOffsetSec / unitDivisor()).toFixed(3)}</td>
             <td class="ds-meta">${ds.yOffset.toFixed(3)}</td>
             <td class="ds-meta">${ds.startTime ? ds.startTime.toLocaleTimeString() : 'relative'}</td>
-            <td class="ds-meta">${notes}</td>
             <td><input type="checkbox" class="ds-visible" data-id="${ds.id}" ${ds.visible ? 'checked' : ''}></td>
             <td><button class="row-btn ds-remove" data-id="${ds.id}" title="Remove this dataset">&times;</button></td>
         </tr>`;
@@ -599,6 +535,9 @@ function renderCurveStyles() {
         return `<div class="curve-row">
             <input type="color" class="curve-color" data-key="${key}" value="${st.color}" title="Curve colour">
             <span class="curve-label">${meta.label}</span>
+            <input type="text" class="curve-name" data-key="${key}" value="${escapeHtml(st.name)}"
+                   placeholder="${escapeHtml(defaultCurveLabel(ds, key))}"
+                   title="Legend text. Empty = dataset label + series name.">
             <label title="Line width in px">line
                 <input type="number" class="curve-width" data-key="${key}" value="${st.width}" min="0" max="10" step="0.5">
             </label>
@@ -609,6 +548,9 @@ function renderCurveStyles() {
     }).join('');
 
     // Live updates without re-rendering the panel, so focus is never stolen.
+    host.querySelectorAll('.curve-name').forEach(inp => {
+        inp.addEventListener('change', () => setCurveStyle(inp.dataset.key, { name: inp.value.trim() }));
+    });
     host.querySelectorAll('.curve-color').forEach(inp => {
         inp.addEventListener('input', () => setCurveStyle(inp.dataset.key, { color: inp.value }));
     });
@@ -618,80 +560,6 @@ function renderCurveStyles() {
     host.querySelectorAll('.curve-point').forEach(inp => {
         inp.addEventListener('input', () => setCurveStyle(inp.dataset.key, { point: parseFloat(inp.value) }));
     });
-}
-
-// --- Comment runs -------------------------------------------------------
-// Collapses the per-point comments back into the runs they were stored as.
-// Empty runs (stretches with no comment) are dropped from the result, but the
-// indices are those of the working arrays, so they stay valid after a crop.
-function commentRuns(ds) {
-    const runs = [];
-    if (!ds || !ds.comments) return runs;
-    for (let i = 0; i < ds.comments.length; i++) {
-        const text = ds.comments[i] || '';
-        const last = runs[runs.length - 1];
-        if (last && last.text === text) {
-            last.endIdx = i;
-            last.count++;
-        } else {
-            runs.push({ text: text, startIdx: i, endIdx: i, count: 1 });
-        }
-    }
-    return runs.filter(r => r.text !== '');
-}
-
-function renderComments() {
-    const host = document.getElementById('commentList');
-    const ds = getActive();
-    if (!ds) {
-        host.innerHTML = '<div class="empty-note">Load a dataset to see its comments.</div>';
-        return;
-    }
-    const runs = commentRuns(ds);
-    if (runs.length === 0) {
-        host.innerHTML = '<div class="empty-note">'
-            + (ds.hasCommentColumn
-                ? 'No comments recorded in this dataset.'
-                : 'This file has no comment column. Re-export it from the Viewer to include comments.')
-            + '</div>';
-        return;
-    }
-
-    const div = unitDivisor();
-    const u = unitShort();
-    // Times are shown in plotted coordinates (offsets included), so a row
-    // always matches what the x-axis is currently showing.
-    let html = '<table id="commentTable"><tr><th>From</th><th>To</th><th>Points</th><th>Comment</th></tr>';
-    runs.forEach(r => {
-        const from = (ds.tSec[r.startIdx] + ds.xOffsetSec) / div;
-        const to = (ds.tSec[r.endIdx] + ds.xOffsetSec) / div;
-        html += `<tr data-start="${from}" data-end="${to}" title="Click to zoom to this comment">
-            <td class="ds-meta">${from.toFixed(2)} ${u}</td>
-            <td class="ds-meta">${to.toFixed(2)} ${u}</td>
-            <td class="ds-meta">${r.count}</td>
-            <td class="comment-text">${escapeHtml(r.text)}</td>
-        </tr>`;
-    });
-    host.innerHTML = html + '</table>';
-
-    host.querySelectorAll('tr[data-start]').forEach(tr => {
-        tr.addEventListener('click', () => {
-            zoomToRange(parseFloat(tr.dataset.start), parseFloat(tr.dataset.end));
-        });
-    });
-}
-
-// Frames an x window, leaving y auto-scaled. A little padding either side so
-// the first and last point of the run are not clipped by the axis edge.
-function zoomToRange(from, to) {
-    if (!Number.isFinite(from) || !Number.isFinite(to)) return;
-    const span = to - from;
-    const pad = span > 0 ? span * 0.05 : Math.max(Math.abs(from) * 0.01, 1 / unitDivisor());
-    sensorChart.options.scales.x.min = from - pad;
-    sensorChart.options.scales.x.max = to + pad;
-    sensorChart.options.scales.y.min = undefined;
-    sensorChart.options.scales.y.max = undefined;
-    sensorChart.update();
 }
 
 function setCurveStyle(key, patch) {
@@ -844,7 +712,6 @@ function cropToView() {
     if (ds.startTime) ds.startTime = new Date(ds.startTime.getTime() + tStart * 1000);
     ds.tSec = newT;
     ds.series = newSeries;
-    ds.comments = keep.map(i => ds.comments[i]);
     ds.availableKeys = SERIES_KEYS.filter(k => ds.series[k].some(v => v !== null));
     ds.cropped = true;
     if (!('xOffsetSec' in ds.raw)) ds.raw.xOffsetSec = ds.xOffsetSec;  // for Reset Crop
@@ -862,7 +729,6 @@ function resetCrop() {
     ds.tSec = ds.raw.tSec.slice();
     ds.series = {};
     SERIES_KEYS.forEach(key => { ds.series[key] = ds.raw.series[key].slice(); });
-    ds.comments = ds.raw.comments.slice();
     ds.availableKeys = SERIES_KEYS.filter(k => ds.series[k].some(v => v !== null));
     ds.startTime = ds.raw.startMs === null ? null : new Date(ds.raw.startMs);
     ds.cropped = false;
@@ -898,13 +764,12 @@ function rebuildChart() {
         const isActive = ds.id === activeId;
         keys.forEach(key => {
             if (!ds.availableKeys.includes(key)) return;
-            const meta = SERIES.find(s => s.key === key);
             const st = curveStyle(ds, key);
             // Inactive datasets keep their colours but are drawn translucent,
             // so the active one reads as the foreground curve.
             const color = isActive ? st.color : hexToRgba(st.color, 0.4);
             chartDatasets.push({
-                label: `${ds.label} - ${meta.label}`,
+                label: curveLabel(ds, key),
                 data: seriesPoints(ds, key),
                 borderColor: color,
                 backgroundColor: color,
@@ -1011,25 +876,15 @@ function buildDatasetCsv(ds, range, applyOffsets) {
     const yShift = applyOffsets ? ds.yOffset : 0;
     const hasClock = !!ds.startTime;
 
-    // Which rows the range keeps, decided once so the comment column can be
-    // built with the same "first exported row is explicit" rule as the Viewer.
-    const kept = [];
+    const header = (hasClock ? ['timestamp'] : []).concat(['elapsed_s'], keys);
+    const lines = [header.join(',')];
+    let count = 0;
+
     for (let i = 0; i < ds.tSec.length; i++) {
         // Range test uses plotted coordinates, which always include offsets.
         const xPlotted = (ds.tSec[i] + ds.xOffsetSec) / div;
-        if (xPlotted >= range.min && xPlotted <= range.max) kept.push(i);
-    }
-    if (kept.length === 0) return null;
+        if (xPlotted < range.min || xPlotted > range.max) continue;
 
-    // Only write the column when the exported rows carry something.
-    const hasComments = kept.some(i => (ds.comments[i] || '') !== '');
-
-    const header = (hasClock ? ['timestamp'] : []).concat(['elapsed_s'], keys);
-    if (hasComments) header.push('comment');
-    const lines = [header.join(',')];
-    let previousComment = null;
-
-    kept.forEach(i => {
         const elapsed = ds.tSec[i] + xShift;
         const cells = [];
         if (hasClock) cells.push(new Date(ds.startTime.getTime() + elapsed * 1000).toISOString());
@@ -1038,23 +893,11 @@ function buildDatasetCsv(ds, range, applyOffsets) {
             const v = ds.series[k][i];
             cells.push(v === null ? '' : (v + yShift));
         });
-        if (hasComments) {
-            const current = ds.comments[i] || '';
-            cells.push(encodeCommentCell(current, previousComment));
-            previousComment = current;
-        }
-        lines.push(cells.map(csvCell).join(','));
-    });
-
-    return { text: lines.join('\n') + '\n', rows: kept.length, keys: keys, comments: hasComments };
-}
-
-// Quotes a single CSV field: numbers pass through, nulls become empty cells,
-// and free text is wrapped whenever it holds a separator, quote or newline.
-function csvCell(v) {
-    if (v === null || v === undefined) return '';
-    const s = String(v);
-    return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+        lines.push(cells.join(','));
+        count++;
+    }
+    if (count === 0) return null;
+    return { text: lines.join('\n') + '\n', rows: count, keys: keys };
 }
 
 // Colons are illegal in filenames on Windows and get mangled elsewhere.
@@ -1109,8 +952,7 @@ function exportToCsv() {
         // Browsers throttle bursts of programmatic downloads; keep them spaced.
         setTimeout(() => downloadText(f.built.text, name), i * 600);
         console.log(`Exporting "${f.ds.label}": ${f.built.rows} rows`
-            + ` (${range.full ? 'full data' : 'visible range'}, offsets ${applyOffsets ? 'applied' : 'not applied'}`
-            + `, comments ${f.built.comments ? 'included' : 'none'}) -> ${name}`);
+            + ` (${range.full ? 'full data' : 'visible range'}, offsets ${applyOffsets ? 'applied' : 'not applied'}) -> ${name}`);
     });
 }
 
@@ -1178,6 +1020,25 @@ document.addEventListener('DOMContentLoaded', () => {
     chartContainer.addEventListener('drop', e => {
         e.preventDefault();
         handleFiles(e.dataTransfer.files);
+    });
+
+    // Chart.js has no legend double-click hook, so hit-test the legend boxes
+    // ourselves. The two single clicks that precede it toggle visibility twice,
+    // leaving it unchanged.
+    document.getElementById('sensorChart').addEventListener('dblclick', (ev) => {
+        const legend = sensorChart.legend;
+        if (!legend || !legend.legendHitBoxes) return;
+        const rect = sensorChart.canvas.getBoundingClientRect();
+        const px = ev.clientX - rect.left;
+        const py = ev.clientY - rect.top;
+        for (let i = 0; i < legend.legendHitBoxes.length; i++) {
+            const b = legend.legendHitBoxes[i];
+            if (px >= b.left && px <= b.left + b.width && py >= b.top && py <= b.top + b.height) {
+                ev.preventDefault();
+                renameCurveAt(legend.legendItems[i].datasetIndex);
+                return;
+            }
+        }
     });
 
     // --- Dataset selection ---

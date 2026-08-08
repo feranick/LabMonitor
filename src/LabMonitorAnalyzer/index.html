@@ -270,34 +270,13 @@
         border-width: 1px;
     }
     .curve-row .unit-tag { color: #555; font-size: 12px; }
-
-    /* --- Comment runs --- */
-    #commentList { width: 100%; }
-    #commentTable {
-        width: 100%;
-        text-align: left;
+    .curve-row input[type="text"] {
+        width: 150px;
         font-size: 14px;
-        border-collapse: collapse;
-        background-color: #e8e8e8;
-        border-radius: 6px;
-        overflow: hidden;
+        padding: 3px 6px;
+        border-width: 1px;
+        border-radius: 5px;
     }
-    #commentTable th {
-        font-size: 12px;
-        text-transform: uppercase;
-        letter-spacing: 0.03em;
-        padding: 4px 6px;
-        border-bottom: 1px solid #aaa;
-        white-space: nowrap;
-    }
-    #commentTable td {
-        padding: 4px 6px;
-        border-bottom: 1px solid #d0d0d0;
-        vertical-align: top;
-    }
-    #commentTable tr[data-start] { cursor: pointer; }
-    #commentTable tr[data-start]:hover { background-color: #cfe0ee; }
-    .comment-text { white-space: pre-wrap; word-break: break-word; }
 </style>
 </head>
 
@@ -366,16 +345,11 @@
     </div>
 </fieldset>
 
-<!-- ===== Comments ===== -->
-<fieldset>
-    <legend>Comments (active dataset)</legend>
-    <div id="commentList"></div>
-</fieldset>
-
 <!-- ===== Curve styles ===== -->
 <fieldset>
-    <legend>Curve colours &amp; sizes (active dataset)</legend>
+    <legend>Curve names, colours &amp; sizes (active dataset)</legend>
     <div id="curveStyleList"></div>
+    <div class="hint">Double-click an entry in the plot legend to rename that curve. Leave a name empty to restore the default.</div>
 </fieldset>
 
 <!-- ===== View / export ===== -->
@@ -397,7 +371,7 @@
         <div class="column">
             <button id="savePngButton">Save Plot as PNG</button>
             <br><br>
-            <button id="saveCsvButton" title="One re-loadable CSV per visible dataset, containing the currently selected series and any comments. Exports only the visible time range unless 'Full data' is checked.">Save Data as CSV</button>
+            <button id="saveCsvButton" title="One re-loadable CSV per visible dataset, containing the currently selected series. Exports only the visible time range unless 'Full data' is checked.">Save Data as CSV</button>
             <br>
             <label class="export-scope" title="Checked: export everything loaded. Unchecked: export only the visible x range.">
                 <input type="checkbox" id="fullDataCheckbox"> Full data
