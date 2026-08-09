@@ -1,4 +1,4 @@
-let version = "2026.08.07.1";
+let version = "2026.08.08.1";
 let sensorChart;
 
 // --- Series definitions -------------------------------------------------
@@ -21,6 +21,10 @@ const SERIES_KEYS = SERIES.map(s => s.key);
 // One base colour per dataset (colour-blind-friendly qualitative palette).
 const PALETTE = ['#d62728', '#1f77b4', '#2ca02c', '#9467bd', '#ff7f0e',
                  '#17becf', '#e377c2', '#7f7f7f', '#bcbd22', '#8c564b'];
+
+// Matches the Viewer's export: a blank comment cell inherits the comment of
+// the previous row, and this sentinel ends a run.
+const NO_COMMENT_TOKEN = 'NO COMMENT';
 
 const DEFAULT_WIDTH = 2;
 const DEFAULT_POINT = 2;
@@ -187,6 +191,34 @@ function renameCurveAt(datasetIndex) {
     rebuildChart();
 }
 
+// --- Comments -----------------------------------------------------------
+// Collapses the per-row comments back into runs: one entry per stretch of rows
+// carrying the same text. Two identical texts separated by a gap stay separate.
+function commentRuns(ds) {
+    const runs = [];
+    if (!ds || !ds.comments) return runs;
+    const n = ds.comments.length;
+    let i = 0;
+    while (i < n) {
+        const text = ds.comments[i];
+        if (text === '') { i++; continue; }
+        let j = i;
+        while (j + 1 < n && ds.comments[j + 1] === text) j++;
+        runs.push({ start: i, end: j, text: text });
+        i = j + 1;
+    }
+    return runs;
+}
+
+function hasComments(ds) {
+    return !!ds && !!ds.comments && ds.comments.some(c => c !== '');
+}
+
+function commentMarkersOn() {
+    const cb = document.getElementById('showCommentsCheckbox');
+    return cb ? cb.checked : true;
+}
+
 // --- Chart Initialization ----------------------------------------------
 function initChart() {
     const ctx = document.getElementById('sensorChart').getContext('2d');
@@ -215,7 +247,13 @@ function initChart() {
                     enabled: true,
                     callbacks: {
                         title: (items) => `t = ${items[0].parsed.x.toFixed(3)} ${unitShort()}`,
-                        label: (item) => `${item.dataset.label}: ${item.parsed.y}`
+                        label: (item) => `${item.dataset.label}: ${item.parsed.y}`,
+                        afterBody: (items) => {
+                            const d = items[0] && items[0].dataset;
+                            const ds = d && datasets.find(x => x.id === d._dsId);
+                            const c = ds && ds.comments && ds.comments[items[0].dataIndex];
+                            return c ? ['', c] : [];
+                        }
                     }
                 },
                 legend: {
@@ -352,6 +390,9 @@ function parseCsvText(text, fileName) {
         throw new Error('no recognised sensor columns (expected e.g. sens1_Temp)');
     }
 
+    // Free-text comment column, written by Viewer 2026.08.06 and later.
+    const commentCol = findColumn(header, 'comment');
+
     const rows = [];
     let skipped = 0;
     for (let i = 1; i < lines.length; i++) {
@@ -371,7 +412,11 @@ function parseCsvText(text, fileName) {
         SERIES_KEYS.forEach(key => {
             values[key] = (key in colOf) ? toNumberOrNull(cells[colOf[key]]) : null;
         });
-        rows.push({ sec: sec, values: values });
+        rows.push({
+            sec: sec,
+            values: values,
+            comment: commentCol === -1 ? '' : String(cells[commentCol] || '').trim()
+        });
     }
     if (rows.length === 0) throw new Error('no rows with a parsable time column');
 
@@ -381,6 +426,22 @@ function parseCsvText(text, fileName) {
     const tSec = rows.map(r => r.sec - startSec);   // starts at exactly 0
     const series = {};
     SERIES_KEYS.forEach(key => { series[key] = rows.map(r => r.values[key]); });
+
+    // Expand the run-length encoding into one comment per row: blank inherits
+    // the running comment, the sentinel ends it. Done after the time sort, so
+    // the fill follows the same order the writer used.
+    const comments = [];
+    let running = '';
+    rows.forEach(r => {
+        if (r.comment === '') {
+            // inherit whatever is running
+        } else if (r.comment.toUpperCase() === NO_COMMENT_TOKEN) {
+            running = '';
+        } else {
+            running = r.comment;
+        }
+        comments.push(running);
+    });
 
     // Absolute start time is only known when the file carried timestamps.
     const startMs = (tsCol !== -1) ? startSec * 1000 : null;
@@ -393,7 +454,8 @@ function parseCsvText(text, fileName) {
         styles: {},                 // per-series {color, width, point} overrides
         tSec: tSec,
         series: series,
-        raw: { tSec: tSec.slice(), series: series, startMs: startMs },
+        comments: comments,
+        raw: { tSec: tSec.slice(), series: series, comments: comments.slice(), startMs: startMs },
         xOffsetSec: 0,
         yOffset: 0,
         visible: true,
@@ -457,7 +519,7 @@ function renderDatasetList() {
     }
 
     let html = '<tr><th></th><th>Dataset</th><th>Points</th><th>Duration</th>'
-             + '<th>X off</th><th>Y off</th><th>Starts</th><th>Show</th><th></th></tr>';
+             + '<th>X off</th><th>Y off</th><th>Starts</th><th>Notes</th><th>Show</th><th></th></tr>';
     datasets.forEach(ds => {
         const dur = ds.tSec.at(-1) / unitDivisor();
         const isActive = ds.id === activeId;
@@ -471,6 +533,7 @@ function renderDatasetList() {
             <td class="ds-meta">${(ds.xOffsetSec / unitDivisor()).toFixed(3)}</td>
             <td class="ds-meta">${ds.yOffset.toFixed(3)}</td>
             <td class="ds-meta">${ds.startTime ? ds.startTime.toLocaleTimeString() : 'relative'}</td>
+            <td class="ds-meta">${commentRuns(ds).length || '-'}</td>
             <td><input type="checkbox" class="ds-visible" data-id="${ds.id}" ${ds.visible ? 'checked' : ''}></td>
             <td><button class="row-btn ds-remove" data-id="${ds.id}" title="Remove this dataset">&times;</button></td>
         </tr>`;
@@ -577,12 +640,65 @@ function resetCurveStyles() {
     rebuildChart();
 }
 
+// Comment table for the active dataset; clicking a row frames that run.
+function renderCommentList() {
+    const host = document.getElementById('commentList');
+    const ds = getActive();
+
+    if (!ds) {
+        host.innerHTML = '<div class="empty-note">Load a dataset to see its comments.</div>';
+        return;
+    }
+    const runs = commentRuns(ds);
+    if (runs.length === 0) {
+        host.innerHTML = '<div class="empty-note">No comments in this dataset'
+            + (ds.comments && ds.comments.length ? '.' : ' (the file has no comment column).') + '</div>';
+        return;
+    }
+
+    const div = unitDivisor();
+    let html = '<table id="commentTable"><tr><th>Start</th><th>Duration</th><th>Clock</th><th>Comment</th></tr>';
+    runs.forEach((run, i) => {
+        const t0 = ds.tSec[run.start] / div;
+        const dur = (ds.tSec[run.end] - ds.tSec[run.start]) / div;
+        const clock = ds.startTime
+            ? new Date(ds.startTime.getTime() + ds.tSec[run.start] * 1000).toLocaleTimeString()
+            : '-';
+        html += `<tr data-run="${i}" title="Click to frame this comment in the plot">
+            <td class="ds-meta">${t0.toFixed(2)} ${unitShort()}</td>
+            <td class="ds-meta">${dur.toFixed(2)} ${unitShort()}</td>
+            <td class="ds-meta">${clock}</td>
+            <td>${escapeHtml(run.text)}</td>
+        </tr>`;
+    });
+    html += '</table>';
+    host.innerHTML = html;
+
+    host.querySelectorAll('tr[data-run]').forEach(tr => {
+        tr.addEventListener('click', () => zoomToRun(runs[parseInt(tr.dataset.run, 10)]));
+    });
+}
+
+// Frames one comment run on the x axis, with a little margin either side.
+function zoomToRun(run) {
+    const ds = getActive();
+    if (!ds || !run) return;
+    const div = unitDivisor();
+    const a = (ds.tSec[run.start] + ds.xOffsetSec) / div;
+    const b = (ds.tSec[run.end] + ds.xOffsetSec) / div;
+    const span = Math.max(b - a, (ds.tSec.at(-1) / div) * 0.02, 1e-6);
+    sensorChart.options.scales.x.min = a - span * 0.15;
+    sensorChart.options.scales.x.max = b + span * 0.15;
+    sensorChart.update();
+}
+
 // Redraws every dependent piece of UI plus the chart.
 function refreshAll() {
     renderDatasetList();
     setControlsEnabled();
     syncOffsetInputs();
     renderCurveStyles();
+    renderCommentList();
     rebuildChart();
 }
 
@@ -707,11 +823,13 @@ function cropToView() {
     const newT = keep.map(i => ds.tSec[i] - tStart);
     const newSeries = {};
     SERIES_KEYS.forEach(key => { newSeries[key] = keep.map(i => ds.series[key][i]); });
+    const newComments = keep.map(i => ds.comments[i]);
 
     // The wall-clock time that the new t = 0 corresponds to.
     if (ds.startTime) ds.startTime = new Date(ds.startTime.getTime() + tStart * 1000);
     ds.tSec = newT;
     ds.series = newSeries;
+    ds.comments = newComments;
     ds.availableKeys = SERIES_KEYS.filter(k => ds.series[k].some(v => v !== null));
     ds.cropped = true;
     if (!('xOffsetSec' in ds.raw)) ds.raw.xOffsetSec = ds.xOffsetSec;  // for Reset Crop
@@ -729,6 +847,7 @@ function resetCrop() {
     ds.tSec = ds.raw.tSec.slice();
     ds.series = {};
     SERIES_KEYS.forEach(key => { ds.series[key] = ds.raw.series[key].slice(); });
+    ds.comments = ds.raw.comments.slice();
     ds.availableKeys = SERIES_KEYS.filter(k => ds.series[k].some(v => v !== null));
     ds.startTime = ds.raw.startMs === null ? null : new Date(ds.raw.startMs);
     ds.cropped = false;
@@ -824,6 +943,7 @@ function changeXUnit(previousDivisor) {
     if (Number.isFinite(x.max)) x.max = x.max * factor;
     syncOffsetInputs();
     renderDatasetList();
+    renderCommentList();
     rebuildChart();
 }
 
@@ -876,9 +996,12 @@ function buildDatasetCsv(ds, range, applyOffsets) {
     const yShift = applyOffsets ? ds.yOffset : 0;
     const hasClock = !!ds.startTime;
 
+    // Only carry the comment column when the exported rows actually have one.
+    let anyComment = false;
     const header = (hasClock ? ['timestamp'] : []).concat(['elapsed_s'], keys);
-    const lines = [header.join(',')];
+    const lines = [];
     let count = 0;
+    let previousComment = null;
 
     for (let i = 0; i < ds.tSec.length; i++) {
         // Range test uses plotted coordinates, which always include offsets.
@@ -893,16 +1016,46 @@ function buildDatasetCsv(ds, range, applyOffsets) {
             const v = ds.series[k][i];
             cells.push(v === null ? '' : (v + yShift));
         });
-        lines.push(cells.join(','));
+
+        // Same run-length encoding the Viewer writes, so the file reloads here
+        // and reads the same way anywhere else that understands the format.
+        const comment = (ds.comments && ds.comments[i]) || '';
+        if (comment !== '') anyComment = true;
+        cells.push(encodeCommentCell(comment, previousComment));
+        previousComment = comment;
+
+        lines.push(cells);
         count++;
     }
     if (count === 0) return null;
-    return { text: lines.join('\n') + '\n', rows: count, keys: keys };
+
+    if (anyComment) header.push('comment');
+    const body = lines.map(cells => {
+        const row = anyComment ? cells : cells.slice(0, -1);
+        return row.map(csvCell).join(',');
+    });
+    return { text: [header.join(',')].concat(body).join('\n') + '\n', rows: count, keys: keys };
 }
 
 // Colons are illegal in filenames on Windows and get mangled elsewhere.
 function stampForFileName(date) {
     return (date || new Date()).toISOString().replace(/:/g, '-');
+}
+
+// Quotes a field only when it needs it, so numbers stay bare.
+function csvCell(v) {
+    if (v === null || v === undefined) return '';
+    const s = String(v);
+    return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+
+// Cell to write for `current` given the previous exported row's comment:
+// blank when unchanged (the reader forward-fills), the sentinel when a run
+// ends, and always explicit on the first row.
+function encodeCommentCell(current, previous) {
+    if (previous === null) return current;
+    if (current === previous) return '';
+    return current === '' ? NO_COMMENT_TOKEN : current;
 }
 
 function safeFileName(s) {
@@ -987,6 +1140,57 @@ function resetZoom() {
     sensorChart.resetZoom();
     console.log('Zoom reset.');
 }
+
+// --- Comment markers on the plot ---------------------------------------
+// Drawn for the active dataset only: with several datasets loaded, every run
+// of every file would bury the curves.
+const CommentMarkersPlugin = {
+    id: 'commentMarkers',
+    afterDatasetsDraw(chart) {
+        const ds = getActive();
+        if (!ds || !ds.visible || !commentMarkersOn()) return;
+        const runs = commentRuns(ds);
+        if (runs.length === 0) return;
+
+        const xScale = chart.scales.x;
+        const area = chart.chartArea;
+        if (!xScale || !area) return;
+
+        const div = unitDivisor();
+        const ctx = chart.ctx;
+        ctx.save();
+        ctx.font = '11px sans-serif';
+        ctx.textBaseline = 'top';
+
+        runs.forEach((run, i) => {
+            const px = xScale.getPixelForValue((ds.tSec[run.start] + ds.xOffsetSec) / div);
+            if (!Number.isFinite(px) || px < area.left || px > area.right) return;
+
+            ctx.setLineDash([4, 3]);
+            ctx.strokeStyle = hexToRgba(ds.baseColor, 0.8);
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(px, area.top);
+            ctx.lineTo(px, area.bottom);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            const text = run.text.length > 24 ? run.text.slice(0, 23) + '...' : run.text;
+            const w = ctx.measureText(text).width + 8;
+            const ty = area.top + 4 + (i % 3) * 16;      // stagger, to limit overlap
+            const tx = (px + 3 + w > area.right) ? px - w - 3 : px + 3;
+
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.88)';
+            ctx.fillRect(tx, ty, w, 14);
+            ctx.strokeStyle = hexToRgba(ds.baseColor, 0.6);
+            ctx.strokeRect(tx, ty, w, 14);
+            ctx.fillStyle = '#222222';
+            ctx.fillText(text, tx + 4, ty + 2);
+        });
+        ctx.restore();
+    }
+};
+Chart.register(CommentMarkersPlugin);
 
 // --- Page Load Event ----------------------------------------------------
 document.addEventListener('DOMContentLoaded', () => {
@@ -1103,6 +1307,8 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('saveCsvButton').addEventListener('click', exportToCsv);
 
     // --- Series selection ---
+    document.getElementById('showCommentsCheckbox').addEventListener('change', () => sensorChart.update());
+
     document.querySelectorAll('.data-checkbox').forEach(cb => {
         cb.addEventListener('change', () => {
             renderCurveStyles();

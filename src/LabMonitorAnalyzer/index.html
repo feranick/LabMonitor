@@ -270,6 +270,31 @@
         border-width: 1px;
     }
     .curve-row .unit-tag { color: #555; font-size: 12px; }
+    #commentList { width: 100%; }
+    #commentTable {
+        width: 100%;
+        text-align: left;
+        font-size: 14px;
+        border-collapse: collapse;
+        background-color: #e8e8e8;
+        border-radius: 6px;
+        overflow: hidden;
+    }
+    #commentTable th {
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+        padding: 4px 6px;
+        border-bottom: 1px solid #aaa;
+        white-space: nowrap;
+    }
+    #commentTable td {
+        padding: 4px 6px;
+        border-bottom: 1px solid #d0d0d0;
+        vertical-align: top;
+    }
+    #commentTable tr[data-run] { cursor: pointer; }
+    #commentTable tr[data-run]:hover { background-color: #cfe0ee; }
     .curve-row input[type="text"] {
         width: 150px;
         font-size: 14px;
@@ -364,6 +389,10 @@
             </select>
         </div>
         <div class="column">
+            <label class="export-scope" title="Draw a dashed marker where each comment starts, for the active dataset.">
+                <input type="checkbox" id="showCommentsCheckbox" checked> Comment markers
+            </label>
+            <br>
             <button id="zoomButton">Toggle Pan/Zoom</button>
             <br><br>
             <button id="resetZoomButton">Reset Zoom</button>
@@ -381,6 +410,13 @@
             </label>
         </div>
     </div>
+</fieldset>
+
+<!-- ===== Comments ===== -->
+<fieldset>
+    <legend>Comments (active dataset)</legend>
+    <div id="commentList"></div>
+    <div class="hint">Click a row to frame that comment in the plot.</div>
 </fieldset>
 
 <!-- ===== Series selection ===== -->

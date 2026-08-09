@@ -1,4 +1,4 @@
-let version = "2026.08.06.1";
+let version = "2026.08.08.1";
 
 const NO_COMMENT_TOKEN = "NO COMMENT";
 let sensorChart;
