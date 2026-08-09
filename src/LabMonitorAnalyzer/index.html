@@ -314,14 +314,16 @@
 <fieldset>
     <legend>Datasets</legend>
     <div style="width:100%; display:flex; flex-wrap:wrap; gap:10px; align-items:center; justify-content:center;">
-        <input type="file" id="fileInput" accept=".csv,text/csv" multiple>
-        <button id="loadCsvButton" title="Load one or more CSV files exported from LabMonitor Viewer">Load CSV&hellip;</button>
+        <input type="file" id="fileInput" accept=".csv,.json,text/csv,application/json" multiple>
+        <button id="loadCsvButton" title="Load CSV files exported from LabMonitor Viewer, or a previously saved .json session">Load Files&hellip;</button>
         <label for="activeDatasetSelect" style="font-size:15px;">Active:</label>
         <select id="activeDatasetSelect"></select>
+        <button id="saveSessionButton" title="Save every dataset, offset, crop, colour and custom legend name to a session file">Save Session</button>
         <button id="clearButton" title="Remove all loaded datasets">Clear All</button>
     </div>
     <table id="datasetList"></table>
-    <div class="hint">Drag &amp; drop CSV files onto the plot to load them. Click a row to make it active.</div>
+    <div class="hint">Drag &amp; drop CSV or session files onto the plot to load them. Click a row to make it active.
+        A session restores everything: datasets, crops, offsets, colours and custom legend names.</div>
 </fieldset>
 
 <!-- ===== Active dataset: offsets, crop, colour ===== -->
@@ -408,6 +410,8 @@
             <label class="export-scope" title="Checked: write the offset-shifted numbers. Unchecked: write the measured values, so the file reloads unchanged.">
                 <input type="checkbox" id="applyOffsetsCheckbox"> Apply offsets
             </label>
+            <br><br>
+            <button id="saveH5Button" title="One HDF5 file, one group per visible dataset, with colours and legend names as attributes. Opens in h5py, MATLAB or Origin.">Export HDF5</button>
         </div>
     </div>
 </fieldset>

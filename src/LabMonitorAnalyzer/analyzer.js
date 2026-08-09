@@ -1,4 +1,4 @@
-let version = "2026.08.08.1";
+let version = "2026.08.08.3";
 let sensorChart;
 
 // --- Series definitions -------------------------------------------------
@@ -195,8 +195,13 @@ function renameCurveAt(datasetIndex) {
 // Collapses the per-row comments back into runs: one entry per stretch of rows
 // carrying the same text. Two identical texts separated by a gap stay separate.
 function commentRuns(ds) {
+    return runsFromComments(ds && ds.comments);
+}
+
+function runsFromComments(comments) {
     const runs = [];
-    if (!ds || !ds.comments) return runs;
+    if (!comments) return runs;
+    const ds = { comments: comments };
     const n = ds.comments.length;
     let i = 0;
     while (i < n) {
@@ -471,11 +476,37 @@ function parseCsvText(text, fileName) {
     return ds;
 }
 
+function looksLikeSession(file, text) {
+    return /\.json$/i.test(file.name) || text.trimStart().startsWith('{');
+}
+
 async function handleFiles(fileList) {
     const files = Array.from(fileList || []);
     if (files.length === 0) return;
     const problems = [];
     let added = 0;
+
+    // A session describes the whole workspace, so it is loaded on its own.
+    if (files.length >= 1) {
+        const first = files[0];
+        const text = await first.text();
+        if (looksLikeSession(first, text)) {
+            if (files.length > 1) {
+                alert('Load the session file on its own: it replaces the whole workspace.');
+                return;
+            }
+            if (datasets.length > 0 &&
+                !confirm('Loading a session replaces every dataset currently loaded. Continue?')) {
+                return;
+            }
+            try {
+                loadSessionText(text, first.name);
+            } catch (e) {
+                alert(`Could not load session:\n${first.name}: ${e.message}`);
+            }
+            return;
+        }
+    }
 
     for (const file of files) {
         try {
@@ -947,6 +978,216 @@ function changeXUnit(previousDivisor) {
     rebuildChart();
 }
 
+// --- Session save / load ------------------------------------------------
+// A session is a single self-contained JSON file holding every loaded dataset
+// (including hidden ones and the uncropped originals), all offsets, crop state,
+// per-curve colours, sizes and custom legend names, comments, and the global UI
+// state. Reloading one restores the workspace exactly as it was saved.
+const SESSION_FORMAT = 'LabMonitorAnalyzer.session';
+const SESSION_VERSION = 1;
+
+// Time is stored to millisecond precision - the resolution it was parsed at -
+// so the JSON stays free of float noise.
+function packTimes(tSec) {
+    return tSec.map(t => Math.round(t * 1000) / 1000);
+}
+
+// Only series that carry data are written; the rest are all-null by definition.
+function packSeries(ds, source) {
+    const out = {};
+    SERIES_KEYS.forEach(key => {
+        const arr = source[key];
+        if (arr && arr.some(v => v !== null)) out[key] = arr;
+    });
+    return out;
+}
+
+function unpackSeries(stored, n) {
+    const out = {};
+    SERIES_KEYS.forEach(key => {
+        const arr = stored && stored[key];
+        out[key] = Array.isArray(arr)
+            ? arr.map(v => (v === null || v === undefined || v === '') ? null : Number(v))
+            : new Array(n).fill(null);
+    });
+    return out;
+}
+
+function expandComments(runs, n) {
+    const out = new Array(n).fill('');
+    (runs || []).forEach(r => {
+        const start = Math.max(0, r[0] | 0);
+        const end = Math.min(n - 1, r[1] | 0);
+        for (let i = start; i <= end; i++) out[i] = String(r[2]);
+    });
+    return out;
+}
+
+function buildSession() {
+    return {
+        format: SESSION_FORMAT,
+        formatVersion: SESSION_VERSION,
+        app: version,
+        saved: new Date().toISOString(),
+        ui: {
+            xUnit: document.getElementById('xUnitSelect').value,
+            xStep: document.getElementById('xStepInput').value,
+            yStep: document.getElementById('yStepInput').value,
+            activeId: activeId,
+            series: selectedSeriesKeys(),
+            hiddenCurves: Array.from(hiddenCurves),
+            showComments: document.getElementById('showCommentsCheckbox').checked,
+            fullData: document.getElementById('fullDataCheckbox').checked,
+            applyOffsets: document.getElementById('applyOffsetsCheckbox').checked
+        },
+        datasets: datasets.map(ds => {
+            const entry = {
+                id: ds.id,
+                name: ds.name,
+                label: ds.label,
+                baseColor: ds.baseColor,
+                styles: ds.styles,
+                xOffsetSec: ds.xOffsetSec,
+                yOffset: ds.yOffset,
+                visible: ds.visible,
+                cropped: ds.cropped,
+                skippedRows: ds.skippedRows || 0,
+                startMs: ds.startTime ? ds.startTime.getTime() : null,
+                tSec: packTimes(ds.tSec),
+                series: packSeries(ds, ds.series),
+                commentRuns: runsFromComments(ds.comments).map(r => [r.start, r.end, r.text])
+            };
+            // The untouched original is only worth storing once it differs.
+            if (ds.cropped) {
+                entry.raw = {
+                    startMs: ds.raw.startMs,
+                    xOffsetSec: Number.isFinite(ds.raw.xOffsetSec) ? ds.raw.xOffsetSec : 0,
+                    tSec: packTimes(ds.raw.tSec),
+                    series: packSeries(ds, ds.raw.series),
+                    commentRuns: runsFromComments(ds.raw.comments).map(r => [r.start, r.end, r.text])
+                };
+            }
+            return entry;
+        })
+    };
+}
+
+function saveSession() {
+    if (datasets.length === 0) {
+        alert('Nothing to save yet. Load a CSV first.');
+        return;
+    }
+    const text = JSON.stringify(buildSession());
+    downloadText(text, stampForFileName(new Date()) + '_analyzer-session.json',
+                 'application/json;charset=utf-8');
+    console.log(`Session saved: ${datasets.length} dataset(s), ${text.length} bytes.`);
+}
+
+// Rebuilds one dataset from its stored entry. Throws with a specific message,
+// so a corrupt file names the dataset that is at fault.
+function datasetFromSession(entry, index) {
+    const where = `dataset ${index + 1}${entry && entry.label ? ` ("${entry.label}")` : ''}`;
+    if (!entry || !Array.isArray(entry.tSec) || entry.tSec.length === 0) {
+        throw new Error(`${where}: missing or empty time array`);
+    }
+    const n = entry.tSec.length;
+    const tSec = entry.tSec.map(Number);
+    if (!tSec.every(Number.isFinite)) throw new Error(`${where}: non-numeric time value`);
+
+    const series = unpackSeries(entry.series, n);
+    const badKey = SERIES_KEYS.find(k => series[k].length !== n);
+    if (badKey) throw new Error(`${where}: series "${badKey}" has ${series[badKey].length} values but ${n} time points`);
+
+    const comments = expandComments(entry.commentRuns, n);
+    const startMs = (entry.startMs === null || entry.startMs === undefined) ? null : Number(entry.startMs);
+
+    const ds = {
+        id: Number(entry.id) || (++datasetCounter),
+        name: entry.name || entry.label || 'session dataset',
+        label: entry.label || entry.name || 'dataset',
+        baseColor: entry.baseColor || nextFreeColor(),
+        styles: (entry.styles && typeof entry.styles === 'object') ? entry.styles : {},
+        tSec: tSec,
+        series: series,
+        comments: comments,
+        xOffsetSec: Number(entry.xOffsetSec) || 0,
+        yOffset: Number(entry.yOffset) || 0,
+        visible: entry.visible !== false,
+        cropped: !!entry.cropped,
+        startTime: startMs === null ? null : new Date(startMs),
+        skippedRows: Number(entry.skippedRows) || 0
+    };
+
+    if (entry.raw && Array.isArray(entry.raw.tSec)) {
+        const rn = entry.raw.tSec.length;
+        ds.raw = {
+            tSec: entry.raw.tSec.map(Number),
+            series: unpackSeries(entry.raw.series, rn),
+            comments: expandComments(entry.raw.commentRuns, rn),
+            startMs: (entry.raw.startMs === null || entry.raw.startMs === undefined) ? null : Number(entry.raw.startMs),
+            xOffsetSec: Number(entry.raw.xOffsetSec) || 0
+        };
+    } else {
+        // Never cropped, or saved without the original: the working copy is it.
+        ds.raw = {
+            tSec: tSec.slice(),
+            series: unpackSeries(entry.series, n),
+            comments: comments.slice(),
+            startMs: startMs
+        };
+        ds.cropped = false;
+    }
+
+    ds.availableKeys = SERIES_KEYS.filter(k => ds.series[k].some(v => v !== null));
+    return ds;
+}
+
+function loadSessionText(text, fileName) {
+    let data;
+    try {
+        data = JSON.parse(text);
+    } catch (e) {
+        throw new Error('not valid JSON');
+    }
+    if (!data || data.format !== SESSION_FORMAT) {
+        throw new Error('not a LabMonitor Analyzer session file');
+    }
+    if (Number(data.formatVersion) > SESSION_VERSION) {
+        throw new Error(`session format v${data.formatVersion} is newer than this Analyzer (v${SESSION_VERSION}); update the app`);
+    }
+    if (!Array.isArray(data.datasets) || data.datasets.length === 0) {
+        throw new Error('session contains no datasets');
+    }
+
+    const restored = data.datasets.map(datasetFromSession);   // may throw
+
+    // Only past validation do we touch the current workspace.
+    datasets.length = 0;
+    hiddenCurves.clear();
+    restored.forEach(ds => datasets.push(ds));
+    datasetCounter = Math.max(datasetCounter, ...restored.map(d => d.id));
+
+    const ui = data.ui || {};
+    if (ui.xUnit) document.getElementById('xUnitSelect').value = ui.xUnit;
+    if (ui.xStep !== undefined) document.getElementById('xStepInput').value = ui.xStep;
+    if (ui.yStep !== undefined) document.getElementById('yStepInput').value = ui.yStep;
+    if (Array.isArray(ui.series)) {
+        document.querySelectorAll('.data-checkbox').forEach(cb => {
+            cb.checked = ui.series.includes(cb.dataset.key);
+        });
+    }
+    (ui.hiddenCurves || []).forEach(k => hiddenCurves.add(k));
+    if (ui.showComments !== undefined) document.getElementById('showCommentsCheckbox').checked = !!ui.showComments;
+    if (ui.fullData !== undefined) document.getElementById('fullDataCheckbox').checked = !!ui.fullData;
+    if (ui.applyOffsets !== undefined) document.getElementById('applyOffsetsCheckbox').checked = !!ui.applyOffsets;
+
+    activeId = datasets.some(d => d.id === ui.activeId) ? ui.activeId : datasets[0].id;
+
+    refreshAll();
+    resetZoom();
+    console.log(`Session "${fileName}" restored: ${datasets.length} dataset(s), saved ${data.saved || 'unknown'} by app ${data.app || '?'}.`);
+}
+
 // --- Export -------------------------------------------------------------
 // When "Full data" is unchecked only the visible x window is exported,
 // mirroring the Viewer's behaviour.
@@ -1062,8 +1303,8 @@ function safeFileName(s) {
     return String(s).replace(/[^A-Za-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'dataset';
 }
 
-function downloadText(text, fileName) {
-    const blob = new Blob([text], { type: 'text/csv;charset=utf-8' });
+function downloadText(text, fileName, mime) {
+    const blob = new Blob([text], { type: mime || 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
@@ -1106,6 +1347,187 @@ function exportToCsv() {
         setTimeout(() => downloadText(f.built.text, name), i * 600);
         console.log(`Exporting "${f.ds.label}": ${f.built.rows} rows`
             + ` (${range.full ? 'full data' : 'visible range'}, offsets ${applyOffsets ? 'applied' : 'not applied'}) -> ${name}`);
+    });
+}
+
+// --- HDF5 export --------------------------------------------------------
+// NOTE ON DTYPES: h5wasm uses single-letter type codes, where '<d' is float64
+// and '<f' is float32. Passing numpy-style '<f8' silently yields float32, which
+// costs enough precision to corrupt epoch-millisecond timestamps.
+const H5_F64 = '<d';
+
+// libhdf5 compiled to WebAssembly, pulled from the CDN the first time the
+// button is used so the page keeps loading fast (and still works offline for
+// everything else). Pinned, like the other libraries.
+const H5WASM_URL = 'https://cdn.jsdelivr.net/npm/h5wasm@0.10.3/dist/esm/hdf5_hl.js';
+let h5wasmPromise = null;
+
+function loadH5wasm() {
+    if (!h5wasmPromise) {
+        h5wasmPromise = import(H5WASM_URL).then(async (mod) => {
+            const h5 = mod.default || mod;
+            const Module = await h5.ready;
+            return { h5: h5, FS: Module.FS };
+        }).catch(err => {
+            h5wasmPromise = null;            // let the next click retry
+            throw err;
+        });
+    }
+    return h5wasmPromise;
+}
+
+// HDF5 object names cannot contain '/', and duplicates would collide.
+function uniqueGroupName(label, taken) {
+    let base = String(label || 'dataset').replace(/[^A-Za-z0-9._-]+/g, '_').replace(/^_+|_+$/g, '');
+    if (base === '') base = 'dataset';
+    let name = base;
+    let n = 2;
+    while (taken.has(name)) name = `${base}_${n++}`;
+    taken.add(name);
+    return name;
+}
+
+function downloadBytes(bytes, fileName, mime) {
+    const blob = new Blob([bytes], { type: mime || 'application/octet-stream' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+// One group per visible dataset, one dataset per selected series, with the
+// curve's styling and legend text attached as attributes. HDF5 has no null, so
+// gaps are written as NaN.
+function writeHdf5(h5, FS, memName) {
+    const keys = selectedSeriesKeys();
+    const range = visibleXRange();
+    const div = unitDivisor();
+    const applyOffsets = document.getElementById('applyOffsetsCheckbox').checked;
+    const shown = datasets.filter(ds => ds.visible);
+
+    const f = new h5.File(memName, 'w');
+    let written = 0;
+    try {
+        f.create_attribute('format', 'LabMonitorAnalyzer.hdf5');
+        f.create_attribute('format_version', 1);
+        f.create_attribute('app_version', version);
+        f.create_attribute('created', new Date().toISOString());
+        f.create_attribute('missing_value', 'NaN');
+        f.create_attribute('offsets_applied', applyOffsets ? 1 : 0);
+        f.create_attribute('range', range.full ? 'full data' : 'visible range');
+
+        const taken = new Set();
+        shown.forEach(ds => {
+            const cols = keys.filter(k => ds.availableKeys.includes(k));
+            if (cols.length === 0) return;
+
+            const xShift = applyOffsets ? ds.xOffsetSec : 0;
+            const yShift = applyOffsets ? ds.yOffset : 0;
+
+            const idx = [];
+            for (let i = 0; i < ds.tSec.length; i++) {
+                const xPlotted = (ds.tSec[i] + ds.xOffsetSec) / div;
+                if (xPlotted >= range.min && xPlotted <= range.max) idx.push(i);
+            }
+            if (idx.length === 0) return;
+
+            const name = uniqueGroupName(ds.label, taken);
+            f.create_group(name);
+            const g = f.get(name);
+
+            g.create_attribute('label', ds.label);
+            g.create_attribute('source_file', ds.name);
+            g.create_attribute('base_color', ds.baseColor);
+            g.create_attribute('x_offset_s', ds.xOffsetSec, null, H5_F64);
+            g.create_attribute('y_offset', ds.yOffset, null, H5_F64);
+            g.create_attribute('offsets_applied', applyOffsets ? 1 : 0);
+            g.create_attribute('cropped', ds.cropped ? 1 : 0);
+            g.create_attribute('n_points', idx.length);
+            g.create_attribute('start_time', ds.startTime ? ds.startTime.toISOString() : '');
+
+            const elapsed = Float64Array.from(idx, i => ds.tSec[i] + xShift);
+            g.create_dataset({ name: 'elapsed_s', data: elapsed, shape: [idx.length], dtype: H5_F64 });
+            g.get('elapsed_s').create_attribute('units', 'seconds');
+
+            if (ds.startTime) {
+                const t0 = ds.startTime.getTime();
+                const stamps = Float64Array.from(idx, i => t0 + (ds.tSec[i] + xShift) * 1000);
+                g.create_dataset({ name: 'timestamp_ms', data: stamps, shape: [idx.length], dtype: H5_F64 });
+                g.get('timestamp_ms').create_attribute('units', 'milliseconds since 1970-01-01T00:00:00Z');
+            }
+
+            cols.forEach(key => {
+                const meta = SERIES.find(s => s.key === key);
+                const st = curveStyle(ds, key);
+                const values = Float64Array.from(idx, i => {
+                    const v = ds.series[key][i];
+                    return v === null ? NaN : v + yShift;
+                });
+                g.create_dataset({ name: key, data: values, shape: [idx.length], dtype: H5_F64 });
+                const d = g.get(key);
+                d.create_attribute('units', meta.unit);
+                d.create_attribute('legend', curveLabel(ds, key));
+                d.create_attribute('color', st.color);
+                d.create_attribute('line_width', st.width, null, H5_F64);
+                d.create_attribute('point_size', st.point, null, H5_F64);
+            });
+
+            const comments = idx.map(i => (ds.comments && ds.comments[i]) || '');
+            if (comments.some(c => c !== '')) {
+                g.create_dataset({ name: 'comment', data: comments, shape: [idx.length] });
+                g.get('comment').create_attribute('description',
+                    'per-sample comment, empty string where none applies');
+            }
+            written++;
+        });
+    } finally {
+        f.close();
+    }
+    return written;
+}
+
+async function exportToHdf5() {
+    if (datasets.length === 0) {
+        alert('No data to export. Load a CSV first.');
+        return;
+    }
+    const btn = document.getElementById('saveH5Button');
+    const label = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Preparing...';
+
+    const memName = 'analyzer-export.h5';
+    try {
+        const { h5, FS } = await loadH5wasm();
+        const written = writeHdf5(h5, FS, memName);
+        if (written === 0) {
+            alert('Nothing to export.\nCheck that a dataset is visible, a series is selected,\nand that data falls inside the visible range, or tick "Full data".');
+            return;
+        }
+        const bytes = FS.readFile(memName);
+        downloadBytes(bytes, stampForFileName(new Date()) + '_analyzer-data.h5', 'application/x-hdf5');
+        console.log(`HDF5 written: ${written} group(s), ${bytes.length} bytes.`);
+    } catch (e) {
+        console.error(e);
+        alert('HDF5 export failed:\n' + (e && e.message ? e.message : e)
+            + '\n\nThe HDF5 writer is fetched from a CDN the first time it is used, so this'
+            + '\nneeds the page to be served over http(s) with network access.');
+    } finally {
+        try { FSUnlink(memName); } catch (ignored) { /* nothing to clean up */ }
+        btn.disabled = false;
+        btn.textContent = label;
+    }
+}
+
+// Removes the scratch file from the in-memory filesystem, if it is there.
+function FSUnlink(memName) {
+    if (!h5wasmPromise) return;
+    h5wasmPromise.then(({ FS }) => {
+        try { FS.unlink(memName); } catch (ignored) { /* already gone */ }
     });
 }
 
@@ -1250,6 +1672,7 @@ document.addEventListener('DOMContentLoaded', () => {
         setActive(parseInt(this.value, 10));
     });
     document.getElementById('clearButton').addEventListener('click', clearAll);
+    document.getElementById('saveSessionButton').addEventListener('click', saveSession);
 
     // --- Label + colours ---
     document.getElementById('dsLabelInput').addEventListener('change', function () {
@@ -1305,6 +1728,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('resetZoomButton').addEventListener('click', resetZoom);
     document.getElementById('savePngButton').addEventListener('click', exportToPng);
     document.getElementById('saveCsvButton').addEventListener('click', exportToCsv);
+    document.getElementById('saveH5Button').addEventListener('click', exportToHdf5);
 
     // --- Series selection ---
     document.getElementById('showCommentsCheckbox').addEventListener('change', () => sensorChart.update());
