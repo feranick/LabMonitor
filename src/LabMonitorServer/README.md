@@ -14,7 +14,8 @@ Web Server: Apache HTTP Server.
 
 WSGI Module: `libapache2-mod-wsgi-py3` (or equivalent for Python 3).
 
-Python 3: With pip.
+Python 3: the system interpreter. Dependencies are installed with apt, not pip
+(see Step 1B).
 
 MongoDB: Running locally or accessible via the network, with the required user credentials.
 
@@ -26,46 +27,57 @@ It is best practice to place the application outside the public DocumentRoot (/v
 
 `sudo mkdir /var/www/LabMonitorDB`
 
-## B. Setup Python Virtual Environment (CRITICAL)
+## B. Install Python Libraries — use the distribution packages
 
-Create an isolated Python environment for the project.
-
-### Create the environment inside the app directory
-`sudo python3 -m venv /var/www/LabMonitorDB/venv`
-
-The virtualenv is only meaningful if Apache is told to use it. See Step 4: the
-`WSGIDaemonProcess` directive must carry `python-home=/var/www/LabMonitorDB/venv`.
-Without that, mod_wsgi runs the application under the *system* interpreter and
-this environment is ignored entirely.
-
-## C. Install Python Libraries
-
-Install the required Python packages into the virtualenv. Call the venv's own
-`pip` by absolute path — do **not** use `sudo pip3 install`, which writes to the
-system `/usr/local/lib/pythonX.Y/dist-packages` instead of the venv.
-
-`sudo /var/www/LabMonitorDB/venv/bin/pip install flask pymongo flask-cors`
+`sudo apt install python3-flask python3-flask-cors python3-pymongo`
 
 (`configparser` is part of the Python 3 standard library and does not need
 installing.)
 
-### Note on distribution upgrades
+Use apt, **not** `sudo pip3 install`. This is the single most important step in
+this guide, for the reason below.
 
-`/usr/local/lib/pythonX.Y/dist-packages` is version-specific. An Ubuntu release
-upgrade that bumps the Python minor version — for example 3.12 to 3.14 — makes
-every package installed there invisible, and the application fails at import
-time with `ModuleNotFoundError`, which mod_wsgi surfaces as an HTML 500 rather
-than a JSON error. A virtualenv wired up via `python-home` avoids this, but the
-virtualenv must itself be recreated after such an upgrade, since its
-`lib/pythonX.Y/site-packages` directory is equally version-specific:
+### Why apt and not pip
+
+`sudo pip3 install` writes to `/usr/local/lib/pythonX.Y/dist-packages`. That
+path is tied to one specific Python minor version, and apt neither manages nor
+migrates it. An Ubuntu release upgrade that bumps the interpreter — 24.04's
+Python 3.12 to 26.04's Python 3.14, for example — leaves every package installed
+that way stranded and invisible. The application then fails at import time with
+`ModuleNotFoundError`, which mod_wsgi surfaces as an HTML 500 page; the viewer
+reports it as `Unexpected token '<', "<!DOCTYPE"... is not valid JSON`.
+
+Packages installed with apt are rebuilt for the new interpreter as part of the
+upgrade, so the application keeps working with no intervention.
+
+Modern pip refuses system-wide installs by default for exactly this reason
+(PEP 668). If you find yourself reaching for `--break-system-packages`, that is
+the signal to use apt instead.
+
+### If a dependency is not packaged, or a specific version is required
+
+Use a virtualenv — never pip into the system interpreter. A virtualenv must be
+pointed at explicitly, via `python-home` on the `WSGIDaemonProcess` directive in
+`data_collector.conf`; simply creating one has no effect on mod_wsgi, which
+otherwise keeps using the system interpreter:
 
 ```
-sudo rm -rf /var/www/LabMonitorDB/venv
 sudo python3 -m venv /var/www/LabMonitorDB/venv
 sudo /var/www/LabMonitorDB/venv/bin/pip install flask pymongo flask-cors
 sudo chown -R www-data:www-data /var/www/LabMonitorDB
-sudo systemctl restart apache2
 ```
+
+```apache
+WSGIDaemonProcess labmonitordb-process user=www-data group=www-data threads=5 \
+    python-home=/var/www/LabMonitorDB/venv
+```
+
+Note that a virtualenv does not survive a Python minor-version upgrade either —
+its `lib/pythonX.Y/site-packages` is equally version-specific — so it must be
+deleted and recreated with the commands above after any release upgrade. That
+manual step is the trade-off for pinning versions apt does not carry. For this
+application, whose three dependencies are all packaged by Ubuntu, apt is the
+better choice.
 
 
 # Step 2: Configure Credentials (config.cfg)
@@ -127,3 +139,22 @@ the WSGI application failed to load, so no Flask route ran. A database that is
 merely unreachable returns a clean JSON 503 instead. Check the traceback:
 
 `sudo tail -40 /var/log/apache2/data_collector_error.log`
+
+A `ModuleNotFoundError` there after a distribution upgrade means the dependency
+was installed with pip rather than apt (Step 1B). Install the missing package
+with apt and reload:
+
+```
+sudo apt install python3-<module>
+sudo systemctl restart apache2
+```
+
+Check which interpreter mod_wsgi is actually using — the version reported at
+Apache startup — with:
+
+`sudo grep 'resuming normal operations' /var/log/apache2/error.log | tail -1`
+
+Note that mod_wsgi daemon processes are not visible under their own name in a
+plain `ps` listing; search for the process group instead:
+
+`ps -eo pid,user,cmd | grep '[w]sgi'`
