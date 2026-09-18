@@ -28,20 +28,44 @@ It is best practice to place the application outside the public DocumentRoot (/v
 
 ## B. Setup Python Virtual Environment (CRITICAL)
 
-Create and activate an isolated Python environment for the project. All subsequent pip install commands must be run while this environment is active.
+Create an isolated Python environment for the project.
 
 ### Create the environment inside the app directory
-`python3 -m venv /var/www/LabMonitorDB/venv`
+`sudo python3 -m venv /var/www/LabMonitorDB/venv`
 
-### Activate the environment (You must run this for the next step)
-`source /var/www/LabMonitorDB/venv/bin/activate`
-
+The virtualenv is only meaningful if Apache is told to use it. See Step 4: the
+`WSGIDaemonProcess` directive must carry `python-home=/var/www/LabMonitorDB/venv`.
+Without that, mod_wsgi runs the application under the *system* interpreter and
+this environment is ignored entirely.
 
 ## C. Install Python Libraries
 
-Install the required Python packages (Flask, pymongo, flask-cors, configparser) into your environment.
+Install the required Python packages into the virtualenv. Call the venv's own
+`pip` by absolute path — do **not** use `sudo pip3 install`, which writes to the
+system `/usr/local/lib/pythonX.Y/dist-packages` instead of the venv.
 
-`sudo pip3 install flask pymongo flask-cors configparser`
+`sudo /var/www/LabMonitorDB/venv/bin/pip install flask pymongo flask-cors`
+
+(`configparser` is part of the Python 3 standard library and does not need
+installing.)
+
+### Note on distribution upgrades
+
+`/usr/local/lib/pythonX.Y/dist-packages` is version-specific. An Ubuntu release
+upgrade that bumps the Python minor version — for example 3.12 to 3.14 — makes
+every package installed there invisible, and the application fails at import
+time with `ModuleNotFoundError`, which mod_wsgi surfaces as an HTML 500 rather
+than a JSON error. A virtualenv wired up via `python-home` avoids this, but the
+virtualenv must itself be recreated after such an upgrade, since its
+`lib/pythonX.Y/site-packages` directory is equally version-specific:
+
+```
+sudo rm -rf /var/www/LabMonitorDB/venv
+sudo python3 -m venv /var/www/LabMonitorDB/venv
+sudo /var/www/LabMonitorDB/venv/bin/pip install flask pymongo flask-cors
+sudo chown -R www-data:www-data /var/www/LabMonitorDB
+sudo systemctl restart apache2
+```
 
 
 # Step 2: Configure Credentials (config.cfg)
@@ -91,3 +115,15 @@ Force WSGI Reload: Inform mod_wsgi that the application has been updated.
 Restart Apache: Apply all configuration changes.
 
 `sudo systemctl restart apache2`
+
+Note that `touch`ing the `.wsgi` file reloads application *code* only. Changes to
+`WSGIDaemonProcess` (including `python-home`) require a full Apache restart.
+
+# Troubleshooting
+
+The viewer reporting `SyntaxError: Unexpected token '<', "<!DOCTYPE"... is not
+valid JSON` means the API returned Apache's HTML error page instead of JSON —
+the WSGI application failed to load, so no Flask route ran. A database that is
+merely unreachable returns a clean JSON 503 instead. Check the traceback:
+
+`sudo tail -40 /var/log/apache2/data_collector_error.log`

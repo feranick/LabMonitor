@@ -1,6 +1,6 @@
 # **********************************************
 # * LabMonitor - Backend pymongo/flask
-# * v2025.11.17.1
+# * v2026.09.18.1
 # * By: Nicola Ferralis <feranick@hotmail.com>
 # **********************************************
 
@@ -33,6 +33,11 @@ db = None
 collection = None
 DATABASE_NAME = None
 COLLECTION_NAME = None
+# Must be defined before the try block: it is consumed by the CORS() call below,
+# which runs even when configuration or the MongoDB connection fails. An empty
+# list fails closed (no cross-origin access) rather than raising NameError and
+# taking down the whole application at import time.
+ORIGINS = []
 
 try:
     # Read credentials from config.cfg
@@ -44,8 +49,8 @@ try:
     SERVER_SECRET_KEY = config['DEFAULT'].get('SERVER_SECRET_KEY')
     DATABASE_NAME = config['DEFAULT'].get('DATABASE_NAME')
     COLLECTION_NAME = config['DEFAULT'].get('COLLECTION_NAME')
-    ORIGINS = config['DEFAULT'].get('ORIGINS')
-    
+    ORIGINS = config['DEFAULT'].get('ORIGINS', ORIGINS)
+
     print(f"[DEBUG] Configuration loaded successfully.")
 
     client = MongoClient(MONGO_AUTH_STRING, serverSelectionTimeoutMS=5000)
@@ -108,7 +113,11 @@ def submit_sensor_data():
         return jsonify({"message": f"Invalid request payload: {str(e)}"}), 400
 
     # 3. Data Transformation (UTC to datetime conversion)
-    data['server_submission_time'] = datetime.datetime.utcnow().isoformat()
+    # datetime.utcnow() is deprecated since Python 3.12. The .replace(tzinfo=None)
+    # keeps the stored string naive, identical in format to what earlier versions
+    # wrote, so existing documents stay consistent.
+    data['server_submission_time'] = datetime.datetime.now(
+        datetime.timezone.utc).replace(tzinfo=None).isoformat()
     
     if 'UTC' in data and isinstance(data['UTC'], int):
         try:
@@ -180,9 +189,6 @@ def get_data():
             }
         }
         
-        # Sort by time, oldest first
-        cursor = collection.find(query).sort("datetime_utc_pico", 1)
-        
         if device_name_str:
             query['device_name'] = device_name_str
 
@@ -204,7 +210,7 @@ def get_data():
                 "sens2_Temp": doc.get("sens2_Temp"),
                 "sens2_RH": doc.get("sens2_RH"),
                 "sens2_P": doc.get("sens2_P"),
-                "sens2_type": doc.get("sens3_type"),
+                "sens2_type": doc.get("sens2_type"),
                 "sens3_Temp": doc.get("sens3_Temp"),
                 "sens3_RH": doc.get("sens3_RH"),
                 "sens3_P": doc.get("sens3_P"),
